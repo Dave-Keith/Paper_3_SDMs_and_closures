@@ -1,0 +1,280 @@
+---
+output: 
+  bookdown::word_document2: 
+    fig_caption: yes
+  bookdown::html_document2: default
+  bookdown::pdf_document2: default
+bibliography: Y:/Zotero/MAR_SABHU.bib
+csl: Y:/Zotero/styles/canadian-journal-of-fisheries-and-aquatic-sciences.csl
+title: Using Species Distribution Models to review the efficacy of time-area closures.  A case study for cod and yellowtail closures on Georges Bank
+author: Keith D.M.^a,b^, Ward-Paige C.A.^c^, Sameoto J.A.^a^, 
+date:  ^a^ Bedford Institue of Oceanography 
+       ^b^ Dalhousie University 
+       ^c^ eOceans
+abstract: 
+Globally, economies and marine ecosystems are increasingly dependent on sustainable fisheries management (SFM) to balance social, economic, and conservation needs. The overarching objectives of SFM are to maximize both conservation and socio-economic benefits, while minimizing short-term socio-economic costs. A number of tools have been developed to achieve SFM objectives, ranging from fishery specific to ecosystem-based strategies. Closures are a common SFM tool used to balance the trade-off between socio-economic and conservation considerations; they vary in scope from small-scale temporary closures to large-scale permanent networks. Unfortunately, closures are frequently implemented without a plan for monitoring or assessing whether SFM objectives are met.
+
+- Changes in spatial dynamics within these homogeneous regions viewed as temporal changes, despite the data collection inherintly being done spatial (i.e.  data collection covers the entirety of a region)
+- Spatial components recognized as important but accounting for space and time computationally and statistically complex
+- Recent advances in computing and stats provide an opportunity to better understand spatio-temporal variability
+- Here we use 3 groundfish surveys in conjunction with XX static environmental layers to explore the spatio-temporal variabilty of 2 groundfish species on Georges Bank.
+
+
+Species distribution models (SDMs) for Yellowtail flounder and Atlantic cod were developed using Fisheries and Oceans Canada (DFO) and National Marine Fisheries Service (NMFS) trawl surveys in combination with XX static environmental layers to determine which environmental covariates predicted the species distributions, how this varied intra-annually, and how the SDMs changed over time.  For both species and all surveys depth and sea surface temperature consistently were shown to influence the location of the species.  In addition to these covariates the random fields for both species changed over time, with evidence for changes in the yellowtail distributions ever 3 years, and changes in the cod distributions observed every 5 year. For cod these shifts show an northward shift in the distribution and the disappearance of cod from large portions of Georges Bank.In addition the use of 3 different surveys over the course of the year enabled the identifiction of seasonal shifts in the patterns for both species.    These results were used to develop metrics to determine the and to determine how the underlying species distribution changes both intra- and inter-annually. 
+
+The current distribution of scallop on the Canadian portion of Georges Bank
+
+---
+
+
+<!-- Bring in the data + figures  -->
+```{r, echo=F, include=F}
+# Bring in the data
+library(INLA)
+library(readxl)
+library(xtable)
+library(pander)
+library(png)
+library(PBSmapping)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(betareg)
+library(MASS)
+library(tidyverse)
+library(mgcv)
+library(boot)
+library(cowplot)
+library(sf)
+
+# Function in case you need it for transforming propotion data to not have 0's and 1's.  
+beta.transform <- function(dat,s=0.5) 
+{
+  (dat*(length(dat)-1) + s) / length(dat)
+}
+
+direct.proj <- "Y:/Projects/GB_time_area_closure_SPERA/" ; direct.tmp <- direct.proj
+# Grab the tables I've created
+table_1 <- read_xlsx(paste0(direct.proj,"Results/Table_1.xlsx"))
+#table_2 <- read.csv(paste0(direct,"Results/Proportion_caught_by_month_pre_vs_post_closure.csv"))
+table_1$`Aggregation index` <- round(table_1$`Aggregation index`,digits=2)
+# Now point to the overview figure we made previously
+fig.overview <- paste0(direct.proj,"Results/Figures/Paper_1/Figure_ESS_overview_2.png")
+#fig.prop.tac <- paste0(direct.proj,"Results/Figures/percent_of_tac_by_month.png")
+
+# Load in the data
+load(paste0(direct.proj,"Results/Results_for_paper_all_years.RData"))
+#direct <- direct.tmp# Reset the directory in case the above does something silly...
+# Freyas observer data work up
+load(file=paste0(direct.proj,"Results/Monthy_discards_from_FK.RData"))
+#direct <- direct.tmp# Reset the directory in case the above does something silly...
+year_pre_closure <- 2006
+year_pre_cod_closure <- 2005
+first_year_data <- 2000
+
+# Now I want to set up a general theme for all the ggplots to come
+theme_set(theme_classic(base_size = 10))
+
+# The survey domain area of GB
+scal.area <- signif(sum(surv.info$area_km2),digits =3)
+
+```
+
+# Introduction
+
+While humans have relied on fisheries for centuries, population increases and technological advances have resulted in increased pressures being placed on both fisheries and marine ecosystems [@paulyGlobalTrendsWorld2005]. To help ensure the sustainability of fisheries and their associated ecosystems numerous management tools have been developed and implemented.  These tools range from fishery specific controls such as limiting the number of vessels, days at sea, and the total allowable catch, to tools which focus more broadly on the ecosystem [@pikitchEcosystembasedFisheryManagement2004; @arkemaMarineEcosystembasedManagement2006].  These broader ecosystem based management tools often involve the closure of an area to certain activities and they can range in scope from small temporary area closures directed at specific forms of resource extraction to networks of large permanent marine reserves that prohibit any resource extraction [@agardyAdvancesMarineConservation1994; @gubbayMarineProtectedAreas1995; @gainesDesigningMarineReserve2010; @agardyMindGapAddressing2011].  
+
+The objectives of these closure based management tools are context dependent and the degree of protection highly variable.  The most complete protection are generally found in Marine Protected Areas (MPAs) which are permanent closures and often exclude most, if not all, forms of resource extraction[@agardyAdvancesMarineConservation1994]. More targeted closure based management tools can focus on the protection of specific components of an ecosystem and can come in different variants including; a) permanent protection of sensitive benthic species and habitats by the exclusion of fishing activity [e.g. corals; @steneckAttenuatingEffectsEcosystem2018], b) permanent protection of species and ecosystems via the exclusion of geophysical resource extraction/exploration c) temporary restrictions on resource extraction to protect a species during a vulnerable life-history stage [@okeefeEvaluatingEffectivenessTime2014; @adlersteinPacificHalibutBycatch1998; @armsworthEconomicEfficiencyTime2010], and d) dynamic closures which can vary spatio-temporally at differing scales (@maxwellDynamicOceanManagement2015; @okeefeEvaluatingEffectivenessTime2014; @dunnDynamicOceanManagement2016).
+
+The efficacy of closure based management tools has been debated since they were first proposed and implemented [@agardyDangerousTargetsUnresolved2003; @hilbornWhenCanMarine2004; @hastingsMarineReservesSolve2017]. A major challenge to many closures is to quantify their efficacy [@halpernConfoundingEffectsExport2004; @ahmadiaIntegratingImpactEvaluation2015]; this is especially problematic if a proper monitoring strategy is not implemented [@halpernImpactMarineReserves2003].  While closure design process should clearly identify the goals, the indicators required to ensure the goals are achieved, and a monitoring strategy, one or more of these components is often excluded from the process [@gillCapacityShortfallsHinder2017; @pomeroyHowYourMPA2005].  If the proper design planning is not performed there are a host of potential issues that could lead to an ineffective closure or a closure that may actually cause more harm than having done nothing; these issues are often compounded by a lack of resources [@gillCapacityShortfallsHinder2017; @agardyMindGapAddressing2011].  
+
+These concerns are amplified for closures in which only a portion of an area is closed for part of the year.  For these time-area closures, designing the closure to be at the appropriate spatial and temporal scale is required to increase the probability of meeting their management objectives [@dunnSpatiotemporalManagementFisheries2011; @diamondDesigningMarineReserves2010]. The size of the closure needs to be large enough to encompass the component of the stock that the closure is designed to protect throughout the duration of the closure.  These time=area closures often result in an increase in effort near the closure [both in space and time: @rijnsdorpMicroscaleDistributionBeam1998; @murawskiEffortDistributionCatch2005; @kellnerFishingLineMarine2007; @vanderleeFishingLineCatch2013; @powersFishingEffortRedistribution2009], if the closure is too small this can lead to an increase in the exploitation of the stock that the closure is attempting to protect, while a shorter than desired closure can have the same effect as the fishery effort in the area after the closure reopens can be elevated [@murawskiEffortDistributionCatch2005].  In addition, if the implementation of the closure does not account for potential inter-annual variability in life histories driven by environmental and other factors (e.g. spawning timing) the closure may not actually be protecting the stock during the life history stage it was designed for. A time-area closure that meets it's management objectives requires a detailed knowledge of the biology of the species and an understanding of the current status of the stock [@littleRealtimeSpatialManagement2015].
+
+In situations in which a monitoring strategy for a time-area closure has not been established it is difficult to determine whether the scale of the closure is appropriate to meet the objectives of the closure[@pastoorsEffectsPartiallyClosed2000; @murawskiEffortDistributionCatch2005]. Even the complete shut down of a fishery in a region would not necessarily result in the achievement of the management objectives for a closure (e.g. ecosystem/species recovery).  In many fisheries there is a wealth of information collected on a regular basis, this includes logbook records of fishery location, landings and effort, Vessel Monitoring System (VMS) or Automatic Identification System (AIS) data, observer records, and fishery independent data (e.g. species-specific and ecosystem surveys).  These data streams can be used to determine if there is evidence that a closure has had any measurable impact on the fishery and whether the fishery interactions with the species of interest have changed [@murawskiEffortDistributionCatch2005]. A lack of a measurable impact on the fishery may suggest that other management measures would be more effective at reaching the overarching management objectives.  
+
+Here we look at two fishery closures which can vary both spatially and temporally on the Canadian portion of Georges Bank. One closure is designed to reduce by-catch of spawning Atlantic cod (*Gadus morhua*), while the second is designed to reduce the by-catch of Yellowtail flounder (*Pleuronectes ferruginea*).  Both of these closures target only the Offshore scallop fishery in the region.  No directed monitoring program was implemented when the closures were established and there is insufficient by-catch information available from the pre-closure era to compare by-catch between the pre-closure and closure eras.  Our objective is to use commonly available metrics from the Offshore scallop fishery and an annual scallop survey to look for evidence of an effect of the closure on the fishery.  We addressed four questions; 1) did the implementation of the closure influence the spatial or temporal fishing patterns of the scallop fleet, 2)  are the closures displacing the scallop fleet from areas that would typically be fished, 3) have the closures impacted the ability of the fleet to reach total allowable catch (TAC), and 4) do closures appear to influence seasonal by-catch patterns during the closure era.
+
+# Methods
+
+### Study area 
+Georges Bank (GB), located in the northwest Atlantic straddling the US-Canada maritime border, is a 3-150 m deep plateau that is 40,000 $km^2$ and characterized by high primary productivity, and historically high fish abundance (REF). It is an eroding bank with no sediment recharge, and covered with coarse gravel and sand that provides important habitat for many species (Valentine & Lough 1991). Since 1984, Georges Bank has been divided between the US and Canada, and, while some collaborative management exists, the US and Canadian portions are largely treated and managed separately (Figure \@ref(fig:Overview)).
+
+### The fishery
+The Canadian offshore scallop fleet currently fishes up to seven banks in Canadian waters, and each bank has a discrete total allowable catch (TAC) that is set by Fisheries and Oceans Canada (DFO). The offshore scallop fleet deploys benthic dredges year round, with both wetfish and freezer trawlers being used that vary in catch rates and ability to process catch (i.e., freezer trawlers are larger, with 50% more dredges and process catch at a higher rate than wetfish ships). Atlantic sea scallop was previously fished to low levels in the 1980's but are now considered a sustainable and economically valuable fishery [@hubleyGeorgesBankBrowns2014]. However, several formerly commercially valuable groundfish species on Georges Bank are well below mean historical levels [@andrushchenkoStockAssessmentGeorges2016; @legaultStockAssessmentGeorges2016a]. Atlantic cod and Yellowtail flounder, which aggregate to spawn on Georges Bank, have had relatively large fisheries in the past but these populations remain at historically low levels and there are additional management measures in place to support recovery. Since 1996, the offshore scallop fleet has only been permitted to land Sea scallop (*Placopecten magellanicus*) and monkfish (*Lophius americanus*), while incidental catches of groundfish are required to be discarded. There currently is no directed fishery for cod and yellowtail with the quota for the bank being divided between incidental catch of the groundfish fleet and by-catch from the offshore scallop fleet. By-catch from the offshore scallop fleet on Georges Bank is estimated from the observer coverage of the scallop fleet (2 trips per month), which is prorated to the bank, whereas the groundfish fleets are to land all cod and yellowtail caught. The primary scallop fishing area on Georges Bank covers approximately `r scal.area` $km^2$.
+
+### Closures 
+On GB, the DFO has also implemented time-area closures to protect aggregations of Atlantic cod and yellowtail flounder during peak spawning from the mobile bottom gear deployed by the scallop fleet. The timing and location of the cod closures has been determined using historical DFO research vessel groundfish survey data that describe peak spawning aggregation times and locations (cells).  For the cod closures, a 10-year moving window of cod abundance is used to identify the cells expected to have the highest cod abundance. Areas with "high abundance" are those with $>$ 3.5 individuals in current years. The top groundfish cells are then combined with the previous years' first quarter scallop fishery effort, to describe overlap between the two features. The Yellowtail closure locations had used the groundfish (otter trawl) fleet by-catch rates from the previous year and scallop catch in the second quarter of the previous year to identify areas of interest, but since 2014 the location of the yellowtail closures have remained static  DFO Resource management, in consultation with the offshore scallop fleet, decide on the cells that should be temporarily closed each year. The location and timing of closures are maintained by Variation Orders issued by DFO Maritimes Region.  Both closures have consisted of a series of 3 to 7 cells, where each cell covers $\approx$ 48 $km^2$ (Table \@ref(tab:Aggregate)). Closed cells were either aggregated with other closed cells or isolated, for a total closed area of 128 to 300 $km^2$ per year, or 5,172 $km^2$ across all years. Atlantic cod closures ranged from 37 to 58 days in February to the end of March, and yellowtail flounder closures have always been for the duration of June. For all the spatial analyses Georges Bank was subdivided into a grid that aligned with these closure cells and all analyses were done using data at the scale of these cells. 
+
+### Observer Data
+
+Discards data were collected by DFO accredited at-sea observers on Georges Bank scallop trips as required by DFO fishery regulations. Discard estimates presented here were calculated following @sameotoReviewStandardizationEffort2013, although some changes have been made. In summary, estimates of discarded weights ($kg$) for Atlantic cod and yellowtail flounder ($s$) from observed scallop trips ($D_o$) were retrieved from the observer database, verified for accuracy, and prorated to account for unobserved portions of observed trips. Fishing effort for each observed trip was calculated using the tow duration and gear width from the logbook data ($Eff_o$, in hour-metres $hm$). 
+For each month, discard rates ($DR_m$ with units of $kg \times hm^{-1}$) were calculated for each species as the sum of observed trip discards ($D_o$) in month $m$ divided by the sum of observed trip effort ($Eff_o$) in month $m$:
+
+$$DR_m = \frac{\sum\limits^{n}_{o=1} D_o} {\sum\limits^{n}_{o=1} Eff_o}$$
+
+From the Georges Bank scallop fishery log data, monthly fishing effort ($Eff_m$) was calculated. Monthly discard rates ($DR_m$) were then multiplied by the monthly effort (from all fishing trips) to estimate the total discards from the fishery each month (in metric tonnes, mt):
+
+$$D_{m,y} = {DR_{m,y}} \times {Eff_{m,y}} \times 0.001 $$
+
+These calculations exclude the moving average calculation used in @sameotoReviewStandardizationEffort2013. For months with no observed trips, the previous month's discard rate was assumed.
+
+The analysis presented here also involves monthly cumulative discard estimates (mt) and annual totals (mt) that were calculated from the total monthly discard estimates. Discard estimates were examined to assess fine-scale (monthly) and broad-scale (annual) temporal patterns.   
+
+Total annual discards ($D_t$) are calculated as the sum of the monthly ($m$) discards ($D_m$) in year $y$ :
+
+$$D_{t,y} = \sum\limits^{12}_{m=1} D_{m,y}$$
+
+Two additional metrics were calculated for this analysis.  The monthly proportion of total annual discards ($PD_m$) was calculated for each month in year $y$ as:
+
+$$PD_{m,y} = \frac{D_{m,y}}{D_{t,y}} $$
+A monthly discard rate anomaly ($DRA_{m,y}$) was calculated as the discard rate in each month of year $y$ divided by the median discard rate in year $y$ ($\widetilde{DR}{_y}$): 
+
+$$ DRA_{m,y} = \frac{DR_{m,y}} {\widetilde{DR}_y} $$
+
+
+### Scallop  research survey data
+Every August since 1981, the DFO has conducted a scallop survey on the Canadian portion of George's Bank to estimate and monitor scallop biomass. The survey is a stratified random design and uses the historic survey index (1981-2009) to define the strata. Although some changes have been made over the years (e.g., change in vessels), these changes are not expected to have affected scallop estimates. For more details on the scallop survey see @hubleyGeorgesBankScallop2009. 
+
+### Logbooks 
+Logbook records were available from 1984 until 2018 and include, among other things, the date, location, effort, and catch.  The records were daily from 1984 until 2008, beginning in 2009 the logbooks have been completed every 6 hours; the monthly scallop landings were calculated using the logbook data. 
+ 
+### VMS 
+VMS data were available from `r first_year_data` onwards, and were pulled from the DFO database August of 2019. VMS data included all offshore scallop vessels, identified and verified by vessel name and vessel identification numbers, for `r first_year_data`-2018.  The records before 2005 were not complete and some VMS data were supplemented with locally maintained records; in the earlier years up to 40% of the VMS records had to be supplemented with locally maintained records.  Since 2005 over 99% of the VMS records were available. Raw VMS data were filtered for 48 minute minimum pings, great circle distances were calculated based on differences between subsequent locations and were used, along with the time difference, to estimate vessel speed (knots). All VMS records within the Georges Bank (GB) defined area were included along with the VMS records on all other offshore banks fished by the scallop fleet, defined by the extent of the DFO scallop survey strata, were retained (Figure \@ref(fig:Overview)). Modal analysis is a common method of filtering VMS (REF), and was undertaken to remove data associated with non-fishing activities (e.g., transiting); this resulted in excluding speeds exceeding 6.53 knots. Further discussions with the scallop industry suggested that fishing occurs at speeds less than 5 knots, thus all VMS records with speeds exceeding 5 knots have been removed. Since the DFO offshore scallop research vessel uses vessels within the fleet, these trips were removed. 
+
+### Analyses
+The pre-closure era (`r first_year_data`-`r (year_pre_closure-1)`) was treated separately from closure era (`r year_pre_closure`-2018), and VMS data on fishing effort were compared to scallop biomass to describe the fishery in these two eras. In the pre-closure era the analyses of the cod and yellowtail closures incorporated all cells that have subsequently been included in the cod or yellowtail closures.  In the closure era only those cod or yellowtail cells that were closed in a particular year were used; the effort estimates for inside the closure cells are based on the portion of the year in which the closure is not in place.
+
+The biomass from the scallop survey was used to determine the productivity of each cell on the bank.  The productivity was categorized as *Low* for cells that had a below average proportion of the total annual biomass ($\lesssim 1$% of total annual biomass), *High* productivity cells were identified cells with a biomass $\geq$ `r signif(q75.bm,digits=2)` $tonnes \cdot km^2$  (this is approximately the most productive $25$% of the bank during the study period), the remainder of the bank was classified as medium productivity.  Similarly, the VMS effort in each cell was classified into 4 categories based on the proportion of total annual effort.  The proportion of total effort was in the bottom $25$% for the *Low* category,   *Below median* cells were in the second quartile, *Above median* were in the third quartile, and the *High* category was for the cells in which the proportion of effort was in the top $25$% in a year. The relationship between VMS effort and biomass (productivity) was compared spatially and between eras to determine if there was evidence the closures influenced the fishing patterns of the scallop fleet.  The offshore scallop fleet can also direct effort to other scallop fishing areas (SFAs; e.g. Brown's Bank). To determine if there was evidence the closures resulted in effort displacement to other SFAs the monthly VMS effort data on Georges Bank was compared to the other SFAs in the pre-closure and closure eras.
+
+To determine the extent to which the closures may displace effort within Georges Bank an analysis was performed to compare the VMS effort inside the closure cells in the month immediately before and after the closure, with the effort on the bank in these same months.  In addition, the effort on the bank during the closure was calculated to look for anomalous fishing patterns during the closures. A $Gamma$ GLM was used to explore the importance of each of the closures to the fishery the VMS $Effort$ ($hours \times km^{-2} \times day^{-1}$) inside the closure cells was compare to the effort on the rest of the bank ($loc$) in the month before and after the closure, along with the effort on the bank during the closures ($timing$). The $\phi$ parameter controls the shape of the $Gamma$ distribution, while $\mu_i$ is the expected value of $Effort_i$.
+
+$$Effort_{i} \sim Gamma(\mu_i,\phi)$$
+$$E(Effort_{i}) = \mu_i  \qquad and \qquad  var(Effort_i) = \frac{\mu_i^2}{\phi}$$
+
+$$log(\mu_i) = loc_i \times timing_i$$
+
+A $Beta$ GLM was used to model how the proportion of the total annual landing ($PTL$), varied by month $month$ between the pre-closure and closure eras ($era$).  The monthly cumulative landings and the total annual landings for each year were calculated from the logbook data, because the beta distribution cannot include zeros or ones the data were compressed slightly to avoid these values [@smithsonBetterLemonSqueezer2006]. The $\psi$ parameter controls the shape of the $beta$ distribution;
+
+
+$$PTL_{i} \sim beta(\mu_i,\psi)$$
+$$E(PTL_{i}) = \mu_i  \qquad and \qquad  var(PTL_i) = \frac{\mu_i \times (1-\mu_i)}{\psi + 1}$$
+
+$$logit(PTL_{i}) = month_i \times era_i $$
+
+The observer data analysis used a generalized additive model (GAM) with a thin plate regression spline smoother to estimate the seasonal patterns of monthly discards ($D_m$), monthly proportion of total discard ($PD_m$), and the monthly discard rate anomaly ($DRA_m$) for both cod and yellowtail.  For the $D_m$ and $DRA_m$ analyses this was modeled using a $Gamma$ GAM.
+
+$$D_{m_{i}} \sim Gamma(\mu_i,\phi) \quad and \quad DRA_{m_{i}} \sim Gamma(\mu_i,\phi) $$
+$$E(D_{m_{i}}) = \mu_i  \quad and \quad E(DRA_{m_{i}}) = \mu_i $$
+$$var(D_{m_{i}}) = \frac{\mu_i^2}{\phi}  \quad and \quad  var(DRA_{m_{i}}) = \frac{\mu_i^2}{\phi}$$
+$$ log(\mu_i) = s(month_i)$$
+
+$PD_m$ was modeled using a $beta$ GAM, because the beta distribution cannot include zeros or ones the data were compressed slightly to avoid these values [@smithsonBetterLemonSqueezer2006].
+
+$$PD_{m_{i}} \sim beta(\mu,\psi)$$
+$$E(PD_{m_{i}}) = \mu_i \quad and \quad var(PD_{m_{i}}) = \frac{\mu_i \times (1-\mu_i)}{\psi + 1}$$
+$$ log(\mu_i) = s(month_i)$$
+
+All analyses were performed in R, the sf package was used for spatial analyses, the mgcv package for the GAM models, and the figures were developed using ggplot2 [@rcoreteamLanguageEnvironmentStatistical2019; @pebesmaSimpleFeaturesStandardized2018; @wickhamGgplot2ElegantGraphics2016; @woodGeneralizedAdditiveModels2017].
+
+# Results
+
+### Biomass and Effort Distribution
+
+
+
+### Biomass and Effort in Closures
+
+
+
+### Effect of Closures on Fishery 
+
+
+
+### Seasonal Pattern of Discards during Closure Era 
+
+
+# Discussion
+
+
+
+# Other Management Options
+
+
+# Future Research 
+
+
+# Conclusions
+
+
+## Acknowledgements 
+XXX We thank A Glass, A Reeves, D Busawon and I Andrushchenko for valuable discussions and insights. 
+
+
+
+
+<br>
+<!-- Insert table 1 note how I'm dealing with the figure caption here-->
+```{r,Aggregate,echo=F}
+options(knitr.kable.NA = '')
+knitr::kable(
+  table_1, booktabs = TRUE, format='pandoc', 
+  caption = "Summary of the past closures.  Area is in $km^2$, Perimeter is $km$.  The aggregation index is the ratio of the Perimeter to Area, lower values indicate increased aggregation."
+)
+```
+
+
+<!-- --- -->
+<!-- # ```{r, echo=F} -->
+<!-- # # Exluding this table for the moment, going with the figure instead  -->
+<!-- # ex.table_2 -->
+<!-- ``` -->
+<!-- --- -->
+
+<br>
+
+
+```{r Overview, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Inset shows magnification of George's Bank a showing the outline (in grey) of the primary scallop bed and hatched squares show all the cells that have been closed in at least one year since 2006 (some were only closed one year, others closed multiple years). Closures for cod are February-March, 2006-2018, and for yellowtail flounder are June, 2007-2018"} 
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(fig.overview)
+```
+
+
+```{r Effort-Biomass-sp, echo=FALSE,out.width="10%",dpi=200,fig.cap = "Annual spatiotemporal patterns of scallop productivity (a,b) and scallop fishing effort (c,d) in pre-closure (2000-2005) and closure (2006-2018) eras. Yellowtail closure cells are blue circles and cod cells are black squares."} 
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(fig.spatial.eff.bm)
+```
+
+
+```{r Effort-Biomass-rel, echo=FALSE,out.width="10%",dpi=200,fig.cap = "The relationship between the proportion of total annual biomass and the proportion of total annual effort in the (a) pre-closure (2000-2005) and (b) closure (2006-2018) eras.  Yellowtail closure cells are blue circles and cod cells are black squares.  Colour of each point represents the productivity classification for that cell in a given year. Vertical dashed line  represents the mean proportion of total annual effort in the cells, while the horizontal dashed line is the mean proportion of total annual biomass in the cells. Percentages represent the percentage of data located in each quadrant"} 
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(fig.prop.bio.eff.rel)
+```
+
+
+<!--- Note the need for a double \ in the formuala inside the fig.cap option -->
+```{r B-D-A,echo=FALSE,out.width="100%",dpi=200,fig.cap = "The scallop fleet effort ($hours \\cdot km^{-2} \\cdot day^{-1}$) in the month before the closure on the bank (Bank_before) and inside the closure (Closure_before); effort on the bank during the closure (Bank_during); and effort in the month after the closure on the bank (Bank_after) and inside the closure (Closure_after); a) Cod closures, b) Yellowtail closures"} 
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(fig.bfa)
+```
+
+```{r Bank-monthly, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Monthly scallop fleet VMS effort by bank across years before and after closures were introduced based on logbook data. Absolute VMS effort (a,b) and proportion of total monthly VMS effort (c,d)"} 
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(fig.prop.GB.vs.other)
+```
+
+```{r Prop-TAC, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Proportion of landings caught by month in the pre-closure and closure eras.  Pre-closure era in grey, closure era in orange; numbers represent the year of the observation and shaded region represents the 95% confidence interval."} 
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(fig.month.land)
+```
+
+```{r Observer-discard-fig, echo=FALSE,warning= F,out.width="100%",dpi=200,fig.cap = "Observed monthly a) Cod prorated total discards, b) Yellowtail prorted total discards c) Cod proportional discards, d) Yellowtail proportional discards, e) Cod discard rate anomalies, and f) Yellowtail discard rate anomalies.  Cod data from 2006-2018, Yellowtail data from 2007-2018.  Anomalies in e) and f) as a proportion of the annual median discard rate (e.g. a value of 2.5 represts a discard rate that is 2.5 times larger than the median monthly discard rate for that species in a specific year) "} 
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(fig.observer)
+```
+
+
+<br>
+
+# References
+

@@ -1,0 +1,65 @@
+---
+title: "Spatio-temporal Paper Draft Story Summary"
+author: "DK"
+date: "9/3/2020"
+output:
+  word_document: default
+  html_document: default
+---
+
+1.  Major challenge facing fishery science is accounting for environmental processes both spatially and temporally.
+
+2.  One way this has been done is SDM's and recent technological breakthroughs mean we can make more advanced SDM's that explicitly account for spatial patterns
+
+3.  Fisheries science has some amazing data to do this but we haven't taken full advantage of the data we have
+
+4.  We going to show you what we can do using Georges Bank which is super data and biologically rich area with a focus on two formerly valuable stocks (Atl. Cod and Yellowtail)
+
+5.  Our objectives are:
+
+    -   Use a suite of static environmental layers to determine whether any of these environmental data informed the distribution of either species
+    -   Determine whether the species distributions changed over time and if so how rapidly changes in the distributions could be observed
+    -   Determine whether the species distributions change seasonally using data from groundfish surveys in the winter, spring, and fall\
+    -   Using these two species as a case study investigate how well existing closures on GB align with these species during spawning and
+    -   Quantify how well the models can predict the spawning distribution of these species 1, 2, and 3 years into the future.
+
+6.  Our results show:
+
+    -   There are both seasonal and long term shifts in the distribution of both species.\
+
+    -   The average sea surface temperature (SST; average from 1997-2008) and depth were significant predictors of the distribution of both species throughout the year.\
+
+    -   Significant shifts in the distribution of both species occurs relatively frequently, with the distribution of cod observed to differ approximately every 5 years, while the Yellowtail distribution appears to fluctuate every 3 years.
+
+    -   These shifts in distribution are not random, with the center of gravity of the core areas for both species shifting to the north and east throughout the study period.
+
+        -   Much of this shift is due to the loss of the species from southern and western portions of GB.
+
+    -   The seasonal distribution of cod and yellowtail are relatively consistent throughout the late winter and spring.
+
+        -   In the fall the distribution of cod shifts towards the edge of the bank.
+        -   Shifts in the distribution of the species has resulted in an increase in the proportion of both species in Canadian waters as the likelihood of encountering either species has declined in the southern and western portion of the bank.
+
+    -   During spawning
+
+        -   For cod there has been a substantial decline in encounter probability in the two large closures in the United States,
+
+        -   Yellowtail are now predominately found straddling the Canada-U.S. border with Closed Area II in the U.S.
+
+        -   Spawning closures facing the Canadian Offshore Scallop Fishery (COSF) in Canada are located in areas in which both species are likely to be observed
+
+            -   But account for only a small proportion of the high quality habitat in Canada
+
+        -   Models for both species were also relatively successful at capturing the spatial dynamics of the stock up to 3 years into the future.
+
+7.  Few of the static environmental variables were associated with the distribution of either species with only Depth, SST, and Sediment (yellowtail) being consistently significant predictors.
+
+8.  Shifts in distribution of both species to the north and east consistent with observed environmental changes on GB.
+
+9.  Cod is likely moving outside the core survey domain in the fall and this should be accounted for in the stock assessment for this species.
+
+10. Static closures can be substantially impacted by temporal shifts in species distributions.
+
+11. Canadian closures are way too small to be effective.
+
+12. Incorporation of these kinds of information into science advice will improve our ability to sustainably manage these stocks.
