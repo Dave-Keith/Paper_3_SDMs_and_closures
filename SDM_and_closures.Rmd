@@ -79,6 +79,187 @@ theme_set(theme_classic(base_size = 10))
 # The survey domain area of GB
 scal.area <- signif(sum(surv.info$area_km2),digits =3)
 
+
+
+# The code from the Closed Area bit of the second paper
+
+
+
+##### 
+# Figures for case study
+#####
+
+# Then we do a case study showing how the encounter probabilities overlap with each of the closures (CAI, CAII, Cod, Yellowtail)
+# for relevant species.  "Time series" showing the encounter probability inside closures, percent of the highest quartile probability area inside the closures should do the trick I think?
+
+hi.yt.spring <- pred.fun(pred.dat = pred.dat, survey = 'nmfs-spring',species = 'yt',prob = hi.prob)
+# Get a nice continuous dummy variable...
+hi.yt.spring$bank$eras <- factor.2.number(factor(hi.yt.spring$bank$yrs, labels =1:length(unique(hi.yt.spring$bank$yrs))))
+hi.yt.spring$bank$species <- "Yellowtail"
+hi.yt.spring$scal$eras <- factor.2.number(factor(hi.yt.spring$scal$yrs, labels =1:length(unique(hi.yt.spring$scal$yrs))))
+hi.yt.spring$scal$species <- "Yellowtail"
+hi.yt.spring$CA1$eras  <- factor.2.number(factor(hi.yt.spring$CA1$yrs, labels =1:length(unique(hi.yt.spring$CA1$yrs))))
+hi.yt.spring$CA2$eras  <- factor.2.number(factor(hi.yt.spring$CA2$yrs, labels =1:length(unique(hi.yt.spring$CA2$yrs))))
+hi.yt.spring$CA1$loc <- "CA I"
+hi.yt.spring$CA2$loc <- "CA II"
+hi.yt.spring$CA1.2 <- bind_rows(hi.yt.spring$CA1,hi.yt.spring$CA2)
+hi.yt.spring$CA1.2$species <- "Yellowtail"
+hi.yt.spring$closure$species <- "Yellowtail"
+
+# Now the cod data...
+hi.cod.winter <- pred.fun(pred.dat = pred.dat, survey = 'RV',species = 'cod')
+# Get nice dummy variables set up...
+hi.cod.winter$bank$eras <- factor.2.number(factor(hi.cod.winter$bank$yrs, labels =5:(length(unique(hi.cod.winter$bank$yrs))+4)))
+hi.cod.winter$bank$species <- "Cod"
+hi.cod.winter$scal$eras <- factor.2.number(factor(hi.cod.winter$scal$yrs, labels =5:(length(unique(hi.cod.winter$scal$yrs))+4)))
+hi.cod.winter$scal$species <- "Cod"
+hi.cod.winter$CA1$eras  <- factor.2.number(factor(hi.cod.winter$CA1$yrs, labels =5:(length(unique(hi.cod.winter$CA1$yrs))+4)))
+hi.cod.winter$CA2$eras  <- factor.2.number(factor(hi.cod.winter$CA2$yrs, labels =5:(length(unique(hi.cod.winter$CA2$yrs))+4)))
+hi.cod.winter$CA1$loc <- "CA I"
+hi.cod.winter$CA2$loc <- "CA II"
+hi.cod.winter$CA1.2 <- bind_rows(hi.cod.winter$CA1,hi.cod.winter$CA2)
+hi.cod.winter$CA1.2$species <- "Cod"
+hi.cod.winter$closure$species <- "Cod"
+# combo data where helpful
+hi.closures <- bind_rows(hi.cod.winter$closure,hi.yt.spring$closure)
+hi.bank <- bind_rows(hi.yt.spring$bank,hi.cod.winter$bank)
+hi.scal <- bind_rows(hi.yt.spring$scal,hi.cod.winter$scal)
+hi.CA1.2 <- bind_rows(hi.yt.spring$CA1.2,hi.cod.winter$CA1.2)
+hi.scal$tot.area <- as.numeric(hi.scal$tot.area)
+hi.CA1.2$tot.area <- as.numeric(hi.CA1.2$tot.area)
+hi.closures$tot.area <- as.numeric(hi.closures$tot.area)
+hi.scal <- hi.scal %>% pivot_longer(cols = c("tot.area","prop.of.GB","prop.scal.hi","mn.hi","lci.hi","uci.hi"), names_to = 'data',)
+hi.CA1.2 <- hi.CA1.2 %>% pivot_longer(cols = c("tot.area","prop.of.GB","mn.hi","lci.hi","uci.hi"), names_to = 'data',)
+hi.closures <- hi.closures %>% pivot_longer(cols = c("tot.area","prop.hi","prop.hi.of.scal.area","mn.hi","lci.hi","uci.hi"), names_to = 'data',)
+hi.scal$data <- factor(hi.scal$data,levels =  c("tot.area","prop.of.GB","prop.scal.hi","mn.hi","lci.hi","uci.hi"))
+hi.CA1.2$data <- factor(hi.CA1.2$data,levels =  c("tot.area","prop.of.GB","prop.scal.hi","mn.hi","lci.hi","uci.hi"))
+hi.closures$data <- factor(hi.closures$data,levels =  c("tot.area","prop.hi","prop.hi.of.scal.area","mn.hi","lci.hi","uci.hi"))
+################ JUST NEED TO TIDY UP YT and COD BANK FIGURES AND I THINK I'M DONE WITH FIGURES FOR THE MOMENT ##################
+# So how about a panel showing the Area of 'high' encounter probability on the bank and inside the Canadian Scallop fishery domain.
+# This is roughly what we want, but Notice the Cod is lined up wrong for some reason, should be starting from 1987 not 1970.
+# See the 'eras' are wrong for cod here, coud be issue in the pred function that only shows up when I combo everything...
+#hi.scal %>% filter(species == "Cod")
+data.label <-  c("High EP Area in COSF domain (km²)","Prop of High EP on GB in COSF domain","Prop of COSF domain with High EP")
+names(data.label) <- c("tot.area","prop.of.GB","prop.scal.hi")
+# A funky way to control axis scales with a facet_wrap call, might be better ways out there.. this works though I think isn't yet perfect!
+d.eras <- unique(hi.scal$yrs)
+n.eras <- length(d.eras)
+dummy <- data.frame(value = c(rep(c(0,1),2*n.eras),rep(c(0,4000),n.eras)),
+                     yrs = rep(d.eras,6),
+                     eras = rep(1:n.eras,6),
+                     data =  sort(rep(names(data.label),2*n.eras)),
+                     species= rep(sort(rep(c("Cod","Yellowtail"),n.eras)),3))
+
+dummy$data <- factor(dummy$data,levels =  names(data.label) )
+
+
+# The plot we want is something like this...
+plt.scal.fishing.area <- ggplot(hi.scal %>% filter(data %in% (names(data.label))),aes(y = value,x = eras,color = species)) + 
+                                   geom_line(size=1.5) +
+                                   facet_wrap(~data ,scales = 'free', labeller = labeller(data =data.label)) +
+                                   xlab("Era") + ylab("") +
+                                   geom_blank(data=dummy)+# This allows me to customize the axes based on what's in dummy.
+                                   scale_x_continuous(breaks = unique(hi.scal$eras),labels = unique(hi.scal$yrs))  + 
+                                   theme(legend.title = element_blank()) + scale_color_manual(values = c("forestgreen","black"))
+
+# So a nice plot of the Candian closures and how unimportant they are!
+save_plot(paste0(direct.proj,"Results/Figures/scal_FA.tiff"),plt.scal.fishing.area,base_width =12,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/scal_FA.png"),plt.scal.fishing.area,base_width =12,base_height =8,units='in')
+scal.FA.plt <- paste0(direct.proj,"Results/Figures/scal_FA.png")
+
+## Now we want to plot what the Canadian closures look like, then the US closures...
+data.label.c <-  c("High EP Area in T-A closure (km²)","Prop of T-A closure with High EP","Prop of COSF High EP area in T-A closure")
+names(data.label.c) <- c("tot.area","prop.hi","prop.hi.of.scal.area")
+# Control axis scales
+# A funky way to control axis scales with a facet_wrap call, might be better ways out there!
+dummy.c <- data.frame(value = c(0,1,0,1,0,300), year = rep(c(2007,2016),3), data =  sort(rep(c("tot.area","prop.hi","prop.hi.of.scal.area"),2)),
+                    species= sort(rep(c("Cod","Yellowtail"),3)))
+dummy.c$data <- factor(dummy.c$data,levels =  c("tot.area","prop.hi","prop.hi.of.scal.area"))
+
+
+plt.scal.closures <- ggplot(hi.closures%>% filter(data %in% (names(data.label.c))),aes(y =value, x = year,color= species)) + 
+                               facet_wrap(~data ,scales = 'free', labeller = labeller(data =data.label.c)) +
+                               geom_line(size=1.5) + 
+                               xlab("") + ylab("") + 
+                               geom_blank(data=dummy.c)+# This allows me to customize the axes based on what's in dummy.
+                               #scale_x_continuous(breaks = unique(hi.scal$eras),labels = unique(hi.scal$yrs))  + 
+                               theme(legend.title = element_blank()) + scale_color_manual(values = c("forestgreen","black"))
+
+
+save_plot(paste0(direct.proj,"Results/Figures/scal_closures.tiff"),plt.scal.closures,base_width =12,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/scal_closures.png"),plt.scal.closures,base_width =12,base_height =8,units='in')
+scal.closures.plt <- paste0(direct.proj,"Results/Figures/scal_closures.png")
+
+# For CA1 and CA2 
+data.label2 <-  c("High EP area in CA (km²)","Prop of High EP on GB in CA")
+names(data.label2) <- c("tot.area","prop.of.GB")
+# A funky way to control axis scales with a facet_wrap call, might be better ways out there.. this works though I think isn't yet perfect!
+d.eras <- unique(hi.CA1.2$yrs)
+n.eras <- length(d.eras)
+dummy2 <- data.frame(value = c(rep(c(0,0.6),n.eras),rep(c(0,6000),n.eras)),
+                     yrs = rep(d.eras,4),
+                     eras = rep(1,n.eras,4),
+                     loc = c(sort(rep(c("CA I","CA II"),n.eras)),sort(rep(c("CA I","CA II"),n.eras))),
+                     data =  sort(rep(c("tot.area","prop.of.GB"),2*n.eras)),
+                     species= rep(sort(rep(c("Cod","Yellowtail"),n.eras)),2))
+
+dummy2$data <- factor(dummy2$data,levels =  c("tot.area","prop.of.GB"))
+
+# First Yelllowtail
+plt.CA1.CA2 <- ggplot(hi.CA1.2 %>% filter(data %in% names(data.label2)),aes(y = value,x = eras,color = species)) + 
+                                   facet_wrap(~ loc + data ,scales = 'free', 
+                                              labeller = labeller(data =data.label2)) +
+                                   geom_line(size = 1.5) +
+                                   geom_blank(data=dummy2)+# This allows me to customize the axes based on what's in dummy.
+                                   scale_x_continuous(breaks = unique(hi.CA1.2$eras),labels = unique(hi.CA1.2$yrs))  + 
+                                   xlab("Era") + ylab("") +
+                                   theme(legend.title = element_blank()) + scale_color_manual(values = c("forestgreen","black"))
+
+# So a nice CA1 and CA2 plot of cod and yellowtail
+save_plot(paste0(direct.proj,"Results/Figures/CA1_CA2_area_hi.tiff"),plt.CA1.CA2,base_width =12,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/CA1_CA2_area_hi.png"),plt.CA1.CA2,base_width =12,base_height =8,units='in')
+CA1.CA2.plt <- paste0(direct.proj,"Results/Figures/CA1_CA2_area_hi.png")
+
+
+# Now some spawning and closure fun...
+prop.CA1.peak <- hi.CA1.2 %>% filter(data == 'prop.of.GB' & loc == "CA I") %>% summarise(max = max(value))
+prop.CA1.peak.yt <- hi.CA1.2 %>% filter(data == 'prop.of.GB' & loc == "CA I" & species == "Yellowtail") %>% summarise(max = round(max(value),digits=2)*100)
+prop.CA1.peak <- as.numeric(round(prop.CA1.peak,digits =2)*100) # YT and Cod proportional peaks are very similar and occured at same time.
+prop.CA2.peak.cod <- hi.CA1.2 %>% filter(data == 'prop.of.GB' & loc == "CA II" & species == "Cod") %>% summarise(max = max(value))
+prop.CA2.peak.cod <- as.numeric(round(prop.CA2.peak.cod,digits =2)*100)
+prop.CA2.yt <-  hi.CA1.2 %>% filter(data == 'prop.of.GB' & loc == "CA II" & species == "Yellowtail") 
+
+prop.CA2.yt.peak <- round(max(prop.CA2.yt$value),digits =2)*100
+prop.CA2.yt.peak.70s <- paste0(round(max(prop.CA2.yt$value[prop.CA2.yt$yrs == "1972-76"]),digits =2)*100,"-",round(max(prop.CA2.yt$value[prop.CA2.yt$yrs == "1982-86"]),digits =2)*100)
+
+tot.hi.area.CA1.2.cod <- hi.CA1.2 %>% filter(data == 'tot.area' & species == "Cod" & yrs %in% c("1987-91","2012-16")) %>% group_by(eras) %>% summarize(sum = round(sum(value),digits = -1))
+tot.hi.CA1.2.loss <- round(-diff(tot.hi.area.CA1.2.cod$sum),digits=-3)
+prop.hi.area.CA1.2.cod <- hi.CA1.2 %>% filter(data == 'prop.of.GB' & species == "Cod" & yrs %in% c("1987-91","2012-16"))  %>% group_by(eras) %>% summarize(sum = round(sum(value)*100,digits = 0))
+prop.hi.area.CA1.2.cod.87 <- prop.hi.area.CA1.2.cod %>% filter(eras==5) %>% summarize(mn=sum)
+prop.hi.area.CA1.2.cod.12 <- prop.hi.area.CA1.2.cod %>% filter(eras==10) %>% summarize(mn=sum)
+
+# Moving to the Canadian side
+cod.cl <- hi.closures %>% filter(species == "Cod")
+yt.cl <- hi.closures %>% filter(species == "Yellowtail")
+hi.scal.yt <- hi.scal %>% filter(species == "Yellowtail")
+hi.scal.cod <- hi.scal %>% filter(species == "Cod")
+cod.area.dec <- hi.scal.cod %>% filter(data == "tot.area") %>% summarise(prop = round(1-min(value)/max(value),digits=2)*100)
+cod.prop.dec <- hi.scal.cod %>% filter(data == "prop.scal.hi") %>% summarise(min = round(min(value),digits=2)*100, max= round(max(value),digits=2)*100)
+cod.prop.GB <- hi.scal.cod %>% filter(data == "prop.of.GB") %>% summarise(min = round(min(value),digits=2)*100, max= round(max(value),digits=2)*100)
+cod.cl.area <- cod.cl %>% filter(data == "tot.area") %>% summarise(min = round(min(value)), max=round(max(value)))
+cod.cl.prop <- cod.cl %>% filter(data == "prop.hi") %>% summarise(min = round(min(value),digits=2)*100,max = max(value)*100)
+cod.cl.prop.GB <- cod.cl %>% filter(data == "prop.hi.of.scal.area") %>% summarise(min = round(min(value),digits=2)*100, max= round(max(value),digits=2)*100)
+
+yt.area.dec <- hi.scal.yt %>% filter(data == "tot.area") %>% summarise(prop = round(1-min(value)/max(value),digits=2)*100)
+yt.tot.area <- hi.scal.yt %>% filter(data == "tot.area") %>% summarise(min = round(min(value)), max = round(max(value)))
+yt.prop.scal <- hi.scal.yt %>% filter(data == "prop.scal.hi") %>% summarise(min = round(min(value),digits=2)*100, max= round(max(value),digits=2)*100)
+yt.prop.GB <- hi.scal.yt %>% filter(data == "prop.of.GB") %>% summarise(min = round(min(value),digits=2)*100, max= round(max(value),digits=2)*100)
+yt.prop.scal.recent <- hi.scal.yt %>% filter(data == "prop.scal.hi" & eras >=6) %>% summarise(min = round(min(value),digits=2)*100, max= round(max(value),digits=2)*100)
+yt.cl.area <- yt.cl %>% filter(data == "tot.area") %>% summarise(min = round(min(value)),max = round(max(value)))
+yt.cl.prop <- yt.cl %>% filter(data == "prop.hi" & year != 2012) %>% summarise(min = round(min(value),digits=2)*100, max =max(value)*100)
+yt.cl.prop.GB <- yt.cl %>% filter(data == "prop.hi.of.scal.area") %>% summarise(min = round(min(value),digits=2)*100, max= round(max(value),digits=2)*100)
+
+
 ```
 
 # Introduction
