@@ -260,6 +260,19 @@ yt.cl.prop <- yt.cl %>% filter(data == "prop.hi" & year != 2012) %>% summarise(m
 yt.cl.prop.GB <- yt.cl %>% filter(data == "prop.hi.of.scal.area") %>% summarise(min = round(min(value),digits=2)*100, max= round(max(value),digits=2)*100)
 
 
+# Sediment type overall...
+sed.bd <- table(dat.final$SEDNUM)
+per.3.4.sed <- signif(100*sum(sed.bd[2:3])/length(dat.final$SEDNUM), digits = 2)
+# Other sediment types are 5.7% of tows, along with a small number of NA tows (which table doesn't show).
+per.other.sed <- signif(100*sum(sed.bd[-c(2:3)])/length(dat.final$SEDNUM), digits = 2)
+CA1.area <- st_area(CA1) %>% set_units("km^2") %>% round() %>% as.numeric()
+CA2.area <- st_area(CA2) %>% set_units("km^2") %>% round() %>% as.numeric()
+CA1.clp <- st_intersection(CA1,clp.pred)
+CA1.clp.area <- CA1.clp %>% st_area() %>% set_units("km^2") %>% round() %>% as.numeric()
+CA2.clp <- st_intersection(CA2,clp.pred)
+CA2.clp.area <- CA2.clp %>% st_area() %>% set_units("km^2") %>% round() %>% as.numeric()
+
+
 ```
 
 # Introduction
