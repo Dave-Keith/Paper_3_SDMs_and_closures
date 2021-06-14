@@ -1,65 +1,58 @@
 ---
-title: "Spatio-temporal Paper Draft Story Summary"
+title: "Differential impacts of shifting species distributions on Closed Areas"
 author: "DK"
-date: "9/3/2020"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
 output:
   word_document: default
   html_document: default
+params:
+  date: !r Sys.Date()
 ---
 
-1.  Major challenge facing fishery science is accounting for environmental processes both spatially and temporally.
+## Intro
 
-2.  One way this has been done is SDM's and recent technological breakthroughs mean we can make more advanced SDM's that explicitly account for spatial patterns
+1.  Georges Bank (GB) has historically been one of the world's most productive fishing grounds. Several formerly abundant groundfish stocks have experienced declines that have resulted in the cessation of directed fisheries. 
 
-3.  Fisheries science has some amazing data to do this but we haven't taken full advantage of the data we have
+1.  Subsequently, management agencies in both Canada and the United States (U.S.) have implemented various restrictions in an effort to rebuild these stocks; these restrictions include the implementation of closures. Yellowtail Flounder (*Limanda ferruginea*) and Atlantic Cod (*Gadus morhua*) are two groundfish stocks which have substantially declined and the rationale for closures on GB has included the need to protect these stocks. 
 
-4.  We going to show you what we can do using Georges Bank which is super data and biologically rich area with a focus on two formerly valuable stocks (Atl. Cod and Yellowtail)
+1. In the U.S. these closures were relatively large and focused more broadly on rebuilding these and other stocks on GB. A number of closures have been implemented over the last several decades in large part to protect groundfish on Georges Bank (Murawski 2000), specifically Atlantic cod, haddock, and yellowtail flounder.  These closures were initially linked to recovery of several stocks on GB, including yellowtail and cod (Murawski 2000), but these recoveries were ephemeral and both of these stocks are currently near historical low biomass across Georges Bank. CA-II was one of the first and largest of these closures, the footprint of CA-II has largely remained unchanged since first being put in place in December of 1994, while management measures have varied over time to allow some activity in this closure, it is the longest serving and largest year-round closure on GB.
 
-5.  Our objectives are:
+1.  Meanwhile, in Canada the closures are directed towards the protection of these cod/yellowtail stocks during spawning. There are 3 notable seasonal closures designed to protect spawning aggregations of groundfish in Canada.  Define goals of closures as best as possible given documentation available.  Groundfish closure is to not disturb spawning aggregations, what is objective of scallop closures, low bycatch or no disturbance (to KVs point). For groundfish this is easy as we will just point out where core area is during spawning, for scallop closures want to point out that we don't know if closures overlap with core area, cite the PLOS One paper.
 
-    -   Use a suite of static environmental layers to determine whether any of these environmental data informed the distribution of either species
-    -   Determine whether the species distributions changed over time and if so how rapidly changes in the distributions could be observed
-    -   Determine whether the species distributions change seasonally using data from groundfish surveys in the winter, spring, and fall\
-    -   Using these two species as a case study investigate how well existing closures on GB align with these species during spawning and
-    -   Quantify how well the models can predict the spawning distribution of these species 1, 2, and 3 years into the future.
+1.  Our objectives are to use a spatio-temporal species distribution model to 
+    - Quantify the size of and changes in 'core area' for each stock in CA-II and compare with trends observed within the rest of the U.S. waters on GB.
+    - Quantify the size of and changes in 'core area' for three spawning closures located in Canadian waters.
 
-6.  Our results show:
+## Methods
 
-    -   There are both seasonal and long term shifts in the distribution of both species.\
+1.  Simplify from last paper and point there for detailed model bits, here just point out what model was used for analyses based on that paper. Talk about closures and overlap mostly.  Need to clarify that for CA I and CA II we are including the portions of these closures within our analysis domain. 
 
-    -   The average sea surface temperature (SST; average from 1997-2008) and depth were significant predictors of the distribution of both species throughout the year.\
 
-    -   Significant shifts in the distribution of both species occurs relatively frequently, with the distribution of cod observed to differ approximately every 5 years, while the Yellowtail distribution appears to fluctuate every 3 years.
+## Results
 
-    -   These shifts in distribution are not random, with the center of gravity of the core areas for both species shifting to the north and east throughout the study period.
+1.  U.S. story
 
-        -   Much of this shift is due to the loss of the species from southern and western portions of GB.
+    a.   U.S. waters outside of CA-II have experienced substaintial declines in the size of the core area of both cod and yellowtail and excluding CA-II there is almost no core area remaining for either cod or yellowtail.  For both stocks the size of the core area has declined steadily over time.
+    a.   CA-II has experienced significant declines in the size of core area of Atlantic cod, but the size of the core area has rebounded after a substainal decline in the 1980s for yellowtail flounder despite widespread declines in the size of the core area throught the rest of US-GB. CA-II contains the vast majority of core area found within U.S. waters for yellowtail.  It is also now the primary area within the U.S. portion of GB that core area for cod is observed on the U.S. side of the bank.
 
-    -   The seasonal distribution of cod and yellowtail are relatively consistent throughout the late winter and spring.
+1.  Canadian story
 
-        -   In the fall the distribution of cod shifts towards the edge of the bank.
-        -   Shifts in the distribution of the species has resulted in an increase in the proportion of both species in Canadian waters as the likelihood of encountering either species has declined in the southern and western portion of the bank.
+    a. The size of the core area in the Canadian groundfish closure has been relatively consistent through time during spawning for both stocks. The percentage of core area on GB located within this closure has increased substatially during spawning over time for both stocks. For yellowtail this is due in part to an increase in the size of the core area in Candian waters, but also due to the decline in core area within U.S. waters outside of CA-II. The size of the core area for cod has declined slowly over time in the fall as the distribution of cod appears to be shifting outside the GB domain used for this study at this time of year.
+    a. The cod closures have primarly been located inside the cod core area during spawning, but the size of the core area in Canada is substantially larger than this closure.  This closure only protects a small fraction of the core area that is avaialbe to the COSF.
+    a. The yellowtail closures have primarly been located inside of yellowtail core area during spawning, but the size of the core area in Canada is substantially larger than this closure.  This closure only protects a small fraction of the core area that is avaialbe to the COSF.
 
-    -   During spawning
 
-        -   For cod there has been a substantial decline in encounter probability in the two large closures in the United States,
+## Discussion
 
-        -   Yellowtail are now predominately found straddling the Canada-U.S. border with Closed Area II in the U.S.
+1. Within U.S. waters the majority of core area remaining for both stocks is found within CA-II.  For yellowtail CA-II has remained an important area for yellowtail throughout time, despite the collapse of core area from the remainder of U.S. waters.  For cod, the remaining core area in U.S. water is only a fraction of what was observed in the past, with CA-II again housing the majority of the core area in U.S. waters.  Within the  Canadian groundfish spawning closure the size of the yellowtail core area has generally increased while the cod core area is relatively unchanged.  Given the trends in U.S. outside of CA-II this has resulted in CA-II and the Canadian closures containing an increased percentage of core area during spawning over time for both stocks.  
 
-        -   Spawning closures facing the Canadian Offshore Scallop Fishery (COSF) in Canada are located in areas in which both species are likely to be observed
+1. Previous analyses  within U.S. waters on GB have shown widespread benefits to the broader GB ecosystem.  These benefits were evident for yellowtail and cod in the early years of the closures (Murawski 2000) but this analysis suggests that neither stock has been consistently observed outside of CA-II in almost 3 decades.  While CA II contains much of the remaining core area for yellowtail in U.S. waters, cod have basically emigrated into Canadian waters. 
 
-            -   But account for only a small proportion of the high quality habitat in Canada
+1. The smaller time-area closures that are in place for the COSF are also largely located core area, but the small size of these closures results in these closures protecting a small fraction of the core area for both stocks. A previous non-spatial analysis for the COSF closures revealed little evidence of an impact of these closures.  This analysis augments those results indicating that the core spawning area for both stocks is much larger than the size of these closures, thus these closures would have little impact on the interactions between the COSF and spawning aggregations.  Other measures, such as reduced effort and voluntary move protocols, have resulted in a substantial decline in bycatch/discards from the COSF and other more adaptive management measures would (O'Keefe) would likely be more effective if further reductions in discards from this fishery during spawning were deemed to be necessary.
 
-        -   Models for both species were also relatively successful at capturing the spatial dynamics of the stock up to 3 years into the future.
+1. Proper monitoring of closures is necessary to ensure they a continuing to meet their conservation objectives.  Broad ecosystem objectives for static closures likely to be more effective than closures with a narrow scope that focus on particular species given the potential for the species to move out of these areas over time when exposed to directional shifts in environmental conditions. When developing MPAs and conservation based closures we need to be mindful of the potential for species distributions to change over time, if the scope of the closure is too narrow it may no longer meet the original objectives, but of course it may well be conferring some other benefit within the ecosystem.
 
-7.  Few of the static environmental variables were associated with the distribution of either species with only Depth, SST, and Sediment (yellowtail) being consistently significant predictors.
+### Maybe a quick point in the discussion....
 
-8.  Shifts in distribution of both species to the north and east consistent with observed environmental changes on GB.
+1.  CA-I was formerly a large year-round closure on GB, it was not directly included in this analysis because of changes in the size and management of the are over time.  It is currently a seasonal spawning closure with a much larger footprint than the closure implemented in 1994. Approximately 50% of the original closure is found within the domain of this study. The core area for both species has declined substantially within the portion of CA-I in this study, in line with the overall declines observed outside of CA-II on GB. The changes in the size of core-area can be found in our dashboard.
 
-9.  Cod is likely moving outside the core survey domain in the fall and this should be accounted for in the stock assessment for this species.
-
-10. Static closures can be substantially impacted by temporal shifts in species distributions.
-
-11. Canadian closures are way too small to be effective.
-
-12. Incorporation of these kinds of information into science advice will improve our ability to sustainably manage these stocks.

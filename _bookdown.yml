@@ -1,0 +1,13 @@
+book_filename: "SDM_Paper"
+rmd_files: ["index.Rmd",
+            "analyses-code.Rmd",
+            "01-intro.Rmd",
+            "02-methods.Rmd",
+            "03-results.Rmd",
+            "04-discussion.Rmd",
+            "05-references.Rmd",
+            "06-tables.Rmd",
+            "07-figures.Rmd",
+            "08-supplement.Rmd"
+           ]
+delete_merged_file: true

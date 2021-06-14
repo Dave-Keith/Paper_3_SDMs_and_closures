@@ -1,0 +1,251 @@
+---
+output:
+  # bookdown::word_document2:
+  #   fig_caption: yes
+  #   number_sections: false
+  # fontsize: 12pt
+  # sansfont: Liberation Sans
+  # mainfont: Liberation Sans
+  # classoption: twocolumn
+  # language: english
+  # bookdown::html_document2: default
+  bookdown::pdf_document2:
+      keep_tex: yes
+      number_sections: no      
+      toc: no
+      #citation_package: biblatex
+  fontsize: 12pt
+  sansfont: Liberation Sans
+  mainfont: Liberation Sans
+  classoption: twocolumn
+  language: english
+  
+# End of options to set
+title: "GB Closures and SDMs"
+author: |
+  David M. Keith^1,2,4^,
+  Jessica A. Sameoto^2^,
+  Freya M. Keyser^2^, and
+  Irene Andrushchenko^3^
+date: |
+  ^1^ Corresponding author - david.keith@dfo-mpo.gc.ca \
+  ^2^ Bedford Institute of Oceanography, Fisheries and Oceans Canada, Dartmouth, Nova Scotia \
+  ^3^ St. Andrews Biological Station, Fisheries and Oceans Canada, St. Andrews, New Brunswick \
+  ^4^ Dalhousie University, Halifax, Nova Scotia \
+  
+     
+month: August # fill in
+year: 2021
+report_number: nnn
+region: Maritimes Region
+author_list: "Keith, D.M., Sameoto, J.A., Keyser, F.M., Andrushchenko, I."
+abstract: |
+  Closures....  
+#header: "Draft working paper --- Do not cite or circulate" # or "" to omit
+
+knit: bookdown::render_book
+link-citations: true
+bibliography: Y:/Zotero/MAR_SABHU.bib
+csl: D:/Github/styles-distribution/ices-journal-of-marine-science.csl
+# Any extra LaTeX code for the header:
+#  Note that if you need to include more than one package you will have to have them on the same line like this:
+header-includes: 
+ - \usepackage{tikz} \usepackage{pdflscape}
+ - \newcommand{\blandscape}{\begin{landscape}}
+ - \newcommand{\elandscape}{\end{landscape}}
+ - \newcommand{\beginsupplement}{\setcounter{table}{0}  \renewcommand{\thetable}{S\arabic{table}} \setcounter{figure}{0} \renewcommand{\thefigure}{S\arabic{figure}}}
+ - \usepackage{lineno}
+ - \linenumbers
+ - \usepackage{setspace} \doublespacing
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE, message=FALSE, results='hide', warning=FALSE}
+library(knitr)
+
+##### Bring in the data and functions
+library(readxl)
+library(xtable)
+library(pander)
+library(png)
+library(PBSmapping)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(betareg)
+library(MASS)
+library(tidyverse)
+library(mgcv)
+library(boot)
+library(cowplot)
+library(ggbiplot)
+library(sf)
+library(sp)
+library(RCurl)
+library(units)
+library(nngeo)
+library(data.table)
+library(ggthemes)
+library(caret)
+library(concaveman)
+library(rosettafish)
+library(readr)
+library(tibble)
+library(kableExtra)
+
+# Bring in our in house functions. First combine them all in a vector
+funs <- c("https://raw.githubusercontent.com/Mar-Scal/Assessment_fns/master/Maps/pectinid_projector_sf.R",
+          "https://raw.githubusercontent.com/Mar-Scal/Assessment_fns/master/Maps/convert_inla_mesh_to_sf.R",
+          "https://raw.githubusercontent.com/Mar-scal/Assessment_fns/master/Maps/centre_of_gravity.R",
+          "https://raw.githubusercontent.com/Mar-scal/Assessment_fns/master/Maps/add_alpha_function.R")
+# Now run through a quick loop to load each one, just be sure that your working directory is read/write!
+for(fun in funs) 
+{
+  download.file(fun,destfile = basename(fun))
+  source(paste0(getwd(),"/",basename(fun)))
+  file.remove(paste0(getwd(),"/",basename(fun)))
+}
+
+#eval(parse(text =getURL("https://raw.githubusercontent.com/Mar-scal/Assessment_fns/master/Maps/convert_inla_mesh_to_sf.R",ssl.verifypeer = FALSE)))
+#source("D:/Github/Offshore/Assessment_fns/DK/Maps/convert_inla_mesh_to_sf.R")
+#source("D:/Github/Offshore/Assessment_fns/DK/Maps/pectinid_projector_sf.R")
+# Here's a little custom function that you can use to set breakpoints in a facet plot, this one is set up the make Depth and SST's look nice
+# used in combo with scale_x_continuous() in ggplot
+breaks_fun <- function(x)  if (max(x) > 15) { seq(0,300,50) } else { seq(8, 14, 0.5) }
+factor.2.number <- function(x) {as.numeric(levels(x))[x]} # My friend factor.2.number
+# Function in case you need it for transforming propotion data to not have 0's and 1's.  
+beta.transform <- function(dat,s=0.5)  (dat*(length(dat)-1) + s) / length(dat)
+# Just so this code is easily portable over to our eventual Res Doc..
+french = FALSE
+#direct.proj <- "Y:/Projects/GB_time_area_closure_SPERA/" 
+direct.proj <- "D:/Github/Paper_3_SDMs_and_closures/"; direct.tmp <- direct.proj
+# The prediction prop function
+source(paste0(direct.proj,"Scripts/predicted_prob_time_series_function.R"))
+```
+
+```{r data-load, echo=FALSE, cache=T, message=FALSE, results='hide', warning=FALSE}
+
+# Some crap we need to load
+#load(paste0(direct.proj,"Data/SST_and_Depth_covariates_and_boundary_for_prediction.RData"))
+load(paste0(direct.proj,"Data/INLA_mesh_input_data.RData"))
+load(paste0(direct.proj,"Data/INLA_meshes.RData"))
+#load(paste0(direct.proj,"data/Depth_SST_and_Sed_on_GB.RData"))
+#load(paste0(direct.proj,"data/Prediction_fields_all_models.RData"))
+load(paste0(direct.proj,"Data/Prediction_and_Rand_fields_all_models.RData")) # Use this only for the prediction fields.
+load(paste0(direct.proj,"Data/Prediction_mesh.RData"))
+
+direct.proj <-  direct.tmp 
+# I think this is what I want for this, I think...
+# Grab the coorindates for CA1, CA2, and the cod/yellowtail closures which are inside this other_boundaries zip file.
+temp <- tempfile()
+# Download this to there
+download.file("https://raw.githubusercontent.com/Mar-scal/GIS_layers/master/other_boundaries/other_boundaries.zip", temp)
+# Figure out what this file was saved as
+temp2 <- tempfile()
+# Unzip it
+unzip(zipfile=temp, exdir=temp2)
+# Now grab the individual shape files I want.
+CA1 <- st_read(dsn = paste0(temp2,"/CA1.shp"))
+CA1 <- st_transform(CA1,crs = 32619)
+CA2 <- st_read(dsn = paste0(temp2,"/CA2.shp"))
+CA2 <- st_transform(CA2,crs = 32619)
+yt.closures <- st_read(dsn =paste0(temp2,"/yt_closures.shp"))
+cod.closures <- st_read(dsn =paste0(temp2,"/cod_closures.shp"))
+
+# Now grab the coordinates for the survey boundaries for GBa and gbb, inside of the survey_boundaries zip.
+temp <- tempfile()
+# Download this to there
+download.file("https://raw.githubusercontent.com/Mar-scal/GIS_layers/master/survey_boundaries/survey_boundaries.zip", temp)
+# Figure out what this file was saved as
+temp2 <- tempfile()
+# Unzip it
+unzip(zipfile=temp, exdir=temp2)
+# And we get GBa and GBb from there
+gba.surv <- st_read(dsn = paste0(temp2,"/GBa.shp"))
+gbb.surv <- st_read(dsn = paste0(temp2,"/GBb.shp"))
+# Make an 'all of gb' sf object
+gb.surv <- st_union(gba.surv,gbb.surv)
+# This removes holes, still have one small artifact out to the east, but it matters little...
+gb.surv <- nngeo::st_remove_holes(gb.surv)
+gb.surv <- st_transform(gb.surv,crs= 32619)
+scal.tot.area <- st_area(gb.surv) %>% set_units("km^2")
+# Put all the closures together so we can easily plot them.
+all.closures <- c(st_geometry(CA1),st_geometry(CA2),st_geometry(yt.closures),st_geometry(cod.closures))
+
+# The survey data, in sf form
+dat.sf <- st_as_sf(dat.final, coords = c('lon','lat'),crs = 4326,remove=F)
+dat.sf <- st_transform(dat.sf,crs = 32619)
+# I need to make the mesh.grid a nicer sf object
+mesh.grid <- st_sf(mesh.grid)
+mesh.sf <- inla.mesh2sf(mesh.gf)
+mesh <- mesh.sf$triangles
+mesh <- st_sf(mesh,crs = st_crs(mesh.grid))
+
+
+##### Done with data loading... Set some variables for the rest of the show..
+
+if (is_latex_output()) {
+  knitr_figs_dir <- "knitr-figs-pdf/"
+  knitr_cache_dir <- "knitr-cache-pdf/"
+  fig_out_type <- "png"
+} else {
+  knitr_figs_dir <- "knitr-figs-docx/"
+  knitr_cache_dir <- "knitr-cache-docx/"
+  fig_out_type <- "png"
+}
+fig_asp <- 0.618
+fig_width <- 9
+fig_out_width <- "6in"
+fig_dpi <- 180
+fig_align <- "center"
+fig_pos <- "htb"
+opts_chunk$set(
+  collapse = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>",
+  fig.path = knitr_figs_dir,
+  cache.path = knitr_cache_dir,
+  fig.asp = fig_asp,
+  fig.width = fig_width,
+  out.width = fig_out_width,
+  echo = FALSE,
+  #  autodep = TRUE,
+  #  cache = TRUE,
+  cache.comments = FALSE,
+  dev = fig_out_type,
+  dpi = fig_dpi,
+  fig.align = fig_align,
+  fig.pos = fig_pos
+)
+options(xtable.comment = FALSE)
+options(kableExtra.latex.load_packages = FALSE)
+
+
+# Don't use scientific notation please!!
+options(scipen=999)
+# Set a nice theme for the ggplots unless I override
+
+# For examplorary purposes I've kept the option to translate to French, and to ID if we are making a word or pdf docnot needed otherwise.
+# `french` is extracted from the YAML header metadata, also later we use metadata to make sure the tables are formatted correctly for word/pdf
+meta <- rmarkdown::metadata$output
+
+if(meta$language == 'french'){ french = T} else {french = F}
+print(french)
+# if(length(grep("pdf", names(meta)))){
+#   #french <- meta$`bookdown::pdf_document2`$french
+#   prepub <- meta$`bookdown::pdf_document2`$prepub
+# }else if(length(grep("word", names(meta)))){
+#   #french <- meta$`bookdown::word_document2`$french
+#   prepub <- meta$`bookdown::word_document2`$prepub
+# }
+if(french) options(OutDec =  ",")
+
+
+# Old 300 word abstract...
+  #A major challenge for fisheries stock assessment and management has been understanding how spatial and temporal heterogeneity impacts the population dynamics of a stock. Although fisheries data are often inherently spatial and temporal in nature; the full utilization of this information has historically been limited. Fortunately, recent computational advances have resulted in new methodologies for spatio-temporal modelling.  Here we developed temporally variable species distribution models for Yellowtail Flounder (*Limanda ferruginea*) and Atlantic Cod (*Gadus morhua*) on Georges Bank (GB) using a suite of static environmental covariates and presence-absence information from groundfish trawl surveys in Canada and the United States (U.S.). These models identified both seasonal and long term shifts in the distribution of both stocks with the average sea surface temperature (SST; average from 1997-2008) and depth being significant predictors of the stocks' distributions.  Significant shifts in the distribution of Atlantic Cod and Yellowtail Flounder were observed every 5 years and at least every 3 years, respectively. The core areas for both stocks shifted to the north and east throughout the study period.  For Atlantic Cod there has been a substantial decline in the size of the core area within the U.S. waters while there has been little change in Canadian waters.  In U.S. waters, the size of the Yellowtail Flounder core area declined rapidly in the late 1970s and early 1980s, but rebounded in the 1990s and early 2000s, while in Canadian waters the size of the core area was unchanged or slowly increased. Simplified models using only the random field for prediction performed as well as the models that included environmental covariates and were able to provide novel insights into both seasonal and inter-annual variability in species distributions. The incorporation of spatial information into science advice will facilitate the sustainable management these stocks.  
+
+```
+
+

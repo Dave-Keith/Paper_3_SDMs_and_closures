@@ -1,0 +1,47 @@
+\clearpage
+
+# TABLES {#ref-tabs}
+
+<!-- Insert table 1 note how I'm dealing with the table caption here-->
+\blandscape
+
+```{r table-1, echo=F,warning=F}
+table_1 <- read_xlsx(paste0(direct.proj,"Data/enviro_data_table.xlsx"))
+
+ft.note <- c("CoML obtained from  http://waves-vagues.dfo-mpo.gc.ca/Library/342505.pdf" ,
+             "USGS(CONMAP) obtained from https://woodshole.er.usgs.gov/openfile/of2005-1001/htmldocs/datacatalog.htm" ,
+             "USGS(SFS-SMD) obtained from https://woodshole.er.usgs.gov/project-pages/mobility/gmaine.html")
+cap <- "Environmental variables used in the analysis. Variables in \\textbf{bold} were retained after Variance Inflation Factor (VIF) analyses and were included in the linear models. Variables in \\textit{italics} were used for the Principal Component Analysis (PCA)"
+if(french) 
+{  
+cap <- "Variables environnementales utilisées dans l'analyse. Les variables \\textbf{en gras} ont été retenues après les Variance Inflation Factor (VIF) analyses et ont été incluses dans les modèles linéaires. Les variables en \\textit{italique} ont été utilisées pour les principales analysis par composantes (PCA)"
+
+ft.note <-  c("CoML obtenu auprès de  http://waves-vagues.dfo-mpo.gc.ca/Library/342505.pdf" ,
+              "USGS(CONMAP) obtenu auprès de https://woodshole.er.usgs.gov/openfile/of2005-1001/htmldocs/datacatalog.htm" ,
+              "USGS(SFS-SMD) obtenu auprès de https://woodshole.er.usgs.gov/project-pages/mobility/gmaine.html")
+}
+
+options(knitr.kable.NA = '')
+# NEED TO SORT THE meta call out in the index using bookdown instead of csasdown to mimic the behaviour to make table work automaticlaly in word an d pdf.
+
+if(any(grepl("pdf", names(meta))))
+{
+kableExtra::kbl(table_1, booktabs = TRUE, escape =F, format='latex',
+  caption = cap) %>%
+  kable_styling(full_width = F) %>% row_spec(c(2:10,12,14:18,20), bold = T) %>%
+  kable_styling(full_width = F) %>% row_spec(c(2,4,5,8:12,14,17,20), italic = T) %>%
+footnote(number  = ft.note) #%>% landscape
+}
+
+if(any(grepl("word", names(meta))))
+{
+kableExtra::kbl(table_1, booktabs = TRUE, escape =F, format = 'pipe',
+  caption = cap) %>%
+  kable_styling(full_width = F) %>% row_spec(c(2:10,12,14:18,20), bold = T) %>%
+  kable_styling(full_width = F) %>% row_spec(c(2,4,5,8:12,14,17,20), italic = T) %>%
+footnote(number  = ft.note) #%>% landscape
+}
+```
+
+\elandscape
+\newpage

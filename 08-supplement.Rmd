@@ -1,0 +1,374 @@
+<!-- The following code should appear at the beginning of the first appendix.
+After that, all subsequent sections will be turned into appendices. -->
+\newpage
+<!-- Adding in a {-#supplement} turns off chapter/section numbering for that specific section, handy if needed, for example '# Supplement  {-#supplement} '` :-) --->
+# SUPPLEMENT 1 {#ref-sup}
+
+\beginsupplement
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+<!-- -->
+```{r PCA, echo=FALSE,out.width="75%",dpi=200,fig.cap = "Principal Component Analysis (PCA) results for the Winter, Spring, and Fall seasons using the retained environmental data and the 4 retained Princpal Components (PCs). The results for PC 1 and 2 for each season are on the top and the PC 3 and 4 results are on the bottom.  Left column are the results for Winter, middle column for Spring, and right column is for the Fall. The percentage of the variance explained by each PC is provided on the axes labels.  Points represent the score for each survey observation.  The loadings for each covariate in the analysis are shown by the length of their respective lines. PC scores greater than ± 3 units not shown."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pca.plt)
+```
+
+\newpage
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\clearpage
+```{r mesh-grid, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Prediction grid used for prediction of occurrence probability (OP)."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(mesh.grid.plt)
+```
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\clearpage
+```{r SST-Dep-Sed, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Georges Bank (GB) Average Sea Surface Temperature from 1997-2008 (SST in °C) in the top panel, bathymetry (depth in meters) in the center panel, and sediment type in the bottom panel."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(sst_depth_spatial.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\blandscape 
+```{r gini-index, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Gini Index "}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(gini.index.plt)
+```
+\elandscape 
+
+## Model Selection
+
+Stage 1 of model selection resulted in a significant reduction in the number of covariates. For Atlantic Cod, sea surface temperature (SST) was identified as a significant covariate in the *Winter* and *Spring*, in addition Dep and stratification were also significant predictors in the *Spring*. In the *Fall* no covariates had a WAIC that were a significant improvement from the intercept only model (Figure \@ref(fig:diag-1-fe)). Further model selection indicated that an additive Dep + SST model was the *final model* in all 3 seasons for Atlantic Cod (Figures \@ref(fig:diag-2-fe) and \@ref(fig:diag-3-fe)). When exploring the effect of temporal variability on the random fields, the models using the 5-year random field had the lowest WAIC in all seasons (Figure \@ref(fig:diag-rf)).
+
+For Yellowtail Flounder, stage 1 of model selection indicated that the inclusion of Dep significantly improved the models in all 3 seasons (surveys), while Sediment type (Sed) and chlorophyll concentration (Chl) in the *Fall* had a similar impact on the model WAIC as Dep. As a result SST, Dep, Chl, and Sed were used to explore the development of more complex covariate models. For Yellowtail Flounder the best models in stage 2 of model selection included 2 covariates with a combination of Dep, SST, and Sed (Figure \@ref(fig:diag-2-fe)). Further model selection indicated that the *final model* for Yellowtail Flounder in all 3 seasons was an additive model including Dep, SST, and Sed (Figure \@ref(fig:diag-3-fe)). When exploring the effect of temporal variability on the random fields, the 3-year field had the lowest WAIC in the *Winter* and *Spring*, while the 5-year field had the lowest WAIC in the *Fall* (Figure \@ref(fig:diag-rf)). Additional model selection results are available in the Model Output and Model Diagnostics sections of the interactive [dashboard](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard).
+
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\blandscape 
+\newpage
+```{r diag-1-fe, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Initial stage of forward model selection using each of the environmental covariates individually.  This model selection was done using a static random field. Blue dashed line is 2 WAIC units larger than the model with the lowest WAIC, the green dashed line is 10 WAIC units larger than the model with the lowest WAIC. The full description of the environmental variables can be found in Table 1."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(diag.waic.single.fe.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r diag-2-fe, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Stage 2 of model selection including additive models with 2 covariates based on the covariates identified in the initial model selection stage. These models were compared using the 10-year random field models. Blue dashed line is 2 WAIC units larger than the model with the lowest WAIC, the green dashed line is 10 WAIC units larger than the model with the lowest WAIC. The full description of the environmental variables can be found in Table 1."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(diag.waic.2.covars.fe.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r diag-3-fe, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Final stage of covariate model selection which includes model with up to 3 covariate terms based on models selected at stage 2. Blue dashed line is 2 WAIC units larger than the model with the lowest WAIC, the green dashed line is 10 WAIC units larger than the model with the lowest WAIC. The full description of the environmental variables can be found in Table 1."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(diag.waic.3.covars.fe.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r diag-rf, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Model selection comparing the random fields models.  For cod the model used is Dep + SST for all of the random fields.  For Yellowtail the 5 and 10 year random fields were compared using the Dep + SST model, while the 5 and 3 fields were compared using the slightly preferred Dep + SST + Sed model. Blue dashed line is 2 WAIC units larger than the model with the lowest WAIC, the green dashed line is 10 WAIC units larger than the model with the lowest WAIC."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(diag.waic.rf.plt)
+```
+\elandscape
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\clearpage
+
+
+# Predicted Occurrence Probability
+
+The modeled OP for Atlantic Cod in the *Winter* and *Spring* was elevated on all but the most southern portion of GB in the 1970s and 1980s, in the early 1990s there was an abrupt decline in the OP throughout much of the U.S. portion of GB, while OP remained elevated in Canadian waters and in the area straddling the ICJ line (Figures \@ref(fig:pf-winter-cod) - \@ref(fig:pf-spring-cod)). In the *Fall* the core areas were isolated in northern of GB. An area on the northwest of GB had some core area until the early 1980s but the OP in this area declined steadily after this time and has had a low OP in the *Fall* for over 20 years, the highest OP areas remaining during the *Fall* are along the northern edge of the bank and mostly in Canadian waters (Figure \@ref(fig:pf-fall-cod)).
+
+The modeled OP patterns for Yellowtail Flounder on GB are similar in the *Winter*, *Spring*, and *Fall* with core area consistently observed in the region straddling the ICJ line in each season and throughout the study period (Figures \@ref(fig:pf-winter-yt) - \@ref(fig:pf-fall-yt)). A second region along the western border of the bank also has an elevated OP and appears to be connected via a narrow band of varying width to the core area straddling the ICJ line. The core area of Yellowtail Flounder declined in the late 1980s and early 1990s and was relatively stable until 2016 (Figure \@ref(fig:pf-fall-yt)).
+
+The standard deviation (SD) of the Atlantic Cod prediction field in the *Winter* and *Spring* tended to be elevated in the central portion of the bank, and lowest in the south and along the edges of the prediction domain. In the *Fall* the Atlantic Cod prediction field SD was lowest in the south, with the low SD area expanding to central regions later in the study period (Figures \@ref(fig:pf-winter-cod-sd) - \@ref(fig:pf-fall-cod-sd)). For Yellowtail Flounder, the SD was consistently low in the part of the region with a core area that straddled the ICJ line in the *Winter*, *Spring*, and *Fall* (Figures \@ref(fig:pf-winter-yt-sd) - \@ref(fig:pf-fall-yt-sd)). Areas surrounding this region displayed an increase in the SD, while a region in the north and along the southern flank of GB had relatively low SDs; these regions also had relatively low OPs (Figures \@ref(fig:pf-winter-yt) - \@ref(fig:pf-fall-yt) and \@ref(fig:pf-winter-yt-sd) - \@ref(fig:pf-fall-yt-sd)).
+
+
+
+<!-- PREDICTION AREA PLOTS ---><!-- PREDICTION AREA PLOTS ---><!-- PREDICTION AREA PLOTS ---><!-- PREDICTION AREA PLOTS ---><!-- PREDICTION AREA PLOTS ---><!-- PREDICTION AREA PLOTS --->
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+
+\newpage
+\blandscape
+```{r pf-winter-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Atlantic Cod  in each era during the Winter (RV survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.winter.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-spring-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Atlantic Cod  in each era during the Spring (NMFS-spring survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.spring.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-fall-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Atlantic Cod  in each era during the Fall (NMFS-fall survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.fall.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-winter-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Yellowtail Flounder in each era during the Winter (RV survey) using the SST + Dep + Sed model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.winter.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-spring-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Yellowtail Flounder in each era during the Spring (NMFS-spring survey) using the SST + Dep + Sed  model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.spring.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-fall-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Yellowtail Flounder in each era during the Fall (NMFS-fall survey) using the SST + Dep + Sed model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.fall.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+<!-- Standard deviation of random field... --->
+
+```{r pf-winter-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Atlantic Cod  in each era during the Winter (RV survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.winter.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-spring-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Atlantic Cod  in each era during the Spring (NMFS-spring survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.spring.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-fall-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Atlantic Cod  in each era during the Fall (NMFS-fall survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.fall.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-winter-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Yellowtail Flounder in each era during the Winter (RV survey) using the SST + Dep + Sed  model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.winter.yt.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+
+```{r pf-spring-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Yellowtail Flounder in each era during the Spring (NMFS-spring survey) using the  SST + Dep + Sed  model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.spring.yt.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-fall-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Yellowtail Flounder in each era during the Fall (NMFS-fall survey) using the SST + Dep + Sed  model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.fall.yt.sd.plt)
+```
+\elandscape
+
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\clearpage
+
+## Random fields 
+
+The 5-year random fields for Atlantic Cod in the Winter and Spring are seasonally consistent through time, with lower effect sizes observed in both seasons starting in 1992 and the largest declines in the effect size observed in the southern and western portions of GB (Figures \@ref(fig:rf-winter-cod) - \@ref(fig:rf-spring-cod)). In the Fall the higher effect sizes were generally observed towards the north and in Canadian waters, with larger declines in the random field effect size towards the west over the study period (Figure \@ref(fig:rf-fall-cod)).
+
+The Yellowtail Flounder random field patterns were similar in the Winter and Spring while the random field effect sizes were somewhat smaller during the Fall (Figures \@ref(fig:rf-winter-yt) - \@ref(fig:rf-fall-yt)). The effect size of the random fields, in all seasons, were lower throughout the latter half of the 1980s and the early 1990s. The highest effect size of the random fields were observed in the 1970s and in the 2000s. Since the mid-1970s an area straddling the Canadian-U.S. border has been consistently identified as an area where the Yellowtail Flounder effect size of the random field is elevated (Figures \@ref(fig:rf-winter-yt) - \@ref(fig:rf-fall-yt)).
+
+The standard deviation (SD) of the random fields for Atlantic Cod were also similar between seasons with the lowest SD generally observed in the north and east and highest approaching the southern flank of GB. The SD was somewhat higher in the Fall throughout the central portion of GB (Figures \@ref(fig:rf-winter-cod-sd) - \@ref(fig:rf-fall-cod-sd)). For Yellowtail Flounder, the SD was higher towards the southern portions of the bank with localized regions having elevated SD scattered throughout the bank in the Winter, Spring, and Fall. (Figures \@ref(fig:rf-winter-yt-sd) - \@ref(fig:rf-fall-yt-sd)).
+
+
+<!-- Random EFFECTS PLOTS ---><!-- Random EFFECTS PLOTS ---><!-- Random EFFECTS PLOTS ---><!-- Random EFFECTS PLOTS ---><!-- Random EFFECTS PLOTS --->
+\blandscape
+```{r rf-winter-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Atlantic Cod  in each era during the Winter (RV survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.winter.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-spring-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Atlantic Cod  in each era during the Spring (NMFS-spring survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.spring.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-fall-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Atlantic Cod  in each era during the Fall (NMFS-fall survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.fall.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-winter-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Yellowtail Flounder in each era during the Winter (RV survey) using the SST + Dep + Sed model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.winter.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-spring-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Yellowtail Flounder in each era during the Spring (NMFS-spring survey) using the SST + Dep + Sed model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.spring.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-fall-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Yellowtail Flounder in each era during the Fall (NMFS-fall survey) using the SST + Dep + Sed model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.fall.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+<!-- Standard deviation of random field... --->
+
+```{r rf-winter-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Atlantic Cod  in each era during the Winter (RV survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.winter.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-spring-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Atlantic Cod  in each era during the Spring (NMFS-spring survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.spring.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-fall-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Atlantic Cod  in each era during the Fall (NMFS-fall survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.fall.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-winter-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Yellowtail Flounder in each era during the Winter (RV survey) using the SST + Dep + Sed model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.winter.yt.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-spring-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Yellowtail Flounder in each era during the Spring (NMFS-spring survey) using the SST + Dep + Sed model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.spring.yt.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-fall-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Yellowtail Flounder in each era during the Fall (NMFS-fall survey) using the SST + Dep + Sed model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.fall.yt.sd.plt)
+```
+\elandscape
+
+## Hyperparameters
+
+For Atlantic Cod, the estimate for the variance of the Dep variance hyperparameter was highest in Winter and declined through to the Fall, reflecting the decline in the influence of this covariate in the Fall (Figure \@ref(fig:hyper-dep-var-est)). For Yellowtail Flounder, the variance of the Dep hyperparameter was higher than observed for Atlantic Cod throughout the year and reflected the relative stability in the effect size of this covariate throughout the year (Figure \@ref(fig:hyper-dep-var-est)). The SST variance hyperparameter for Atlantic Cod was relatively stable throughout the year and reflects the consistent influence of the SST covariate on the distribution of cod. For Yellowtail Flounder, the SST variance hyperparameter was relatively low throughout the year and aligns with the consistent small effect of the SST covariate on the distribution of Yellowtail Flounder (Figure \@ref(fig:hyper-sst-var-est)). The uncertainty of these estimates precludes any statistical differences being observed between the seasons.
+<!-- HYPERPARAMETERS AND VALIDATION PLOTS ---><!-- HYPERPARAMETERS AND VALIDATION PLOTS ---><!-- HYPERPARAMETERS AND VALIDATION PLOTS --->
+
+```{r hyper-dep-var-est, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Dep variance hyperparameter estimate with 95\\% credible intervals for each stock in each season."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(dep.var.est.plt)
+```
+
+\clearpage
+
+```{r hyper-sst-var-est, echo=FALSE,out.width="100%",dpi=200,fig.cap = "SST variance hyperparameter estimate with 95\\% credible intervals for each stock in each season."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(sst.var.est.plt)
+```
+
+
+\clearpage
+
+```{r hyper-cod-winter-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Atlantic Cod in the Winter."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(cod.winter.marginal.plt)
+```
+
+\clearpage
+
+```{r hyper-cod-spring-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Atlantic Cod in the Spring."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(cod.spring.marginal.plt)
+```
+
+\clearpage
+
+```{r hyper-cod-fall-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Atlantic Cod  in the Fall."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(cod.fall.marginal.plt)
+```
+
+\clearpage
+
+```{r hyper-yt-winter-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Yellowtail Flounder in the Winter."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(yt.winter.marginal.plt)
+```
+
+\clearpage
+
+```{r hyper-yt-spring-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Yellowtail Flounder in the Spring."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(yt.spring.marginal.plt)
+```
+
+\clearpage
+
+```{r hyper-yt-fall-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Yellowtail Flounder in the Fall."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(yt.fall.marginal.plt)
+```
+
+\clearpage
+
+

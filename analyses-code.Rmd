@@ -1,0 +1,1609 @@
+<!-- Set the theme for the figures -->
+```{r theme, echo=F, include=F, paged.print=FALSE,cache =F}
+theme_set(theme_few(base_size = 12))
+```
+
+
+
+<!-- Bring in the data + figures   -->
+
+```{r pred-data, echo=F, include=F, paged.print=FALSE,cache =T}
+
+# Decide what you want "Hi probablity" to be for this analysis..
+hi.prob <- 0.75
+
+
+# Now I want to make the prediction field from the new prediction models
+mod.names <- names(pred.output.pred)
+n.mods <- length(mod.names)
+pred.res <- NULL
+for(i in 1:n.mods)
+{
+  res <- pred.output.pred[[mod.names[i]]]
+  # Easy way to pick 3 vs 5 year since I kept both columns but NA'ed the one not being used
+  if(all(is.na(res$years_3)))
+  {
+    n.eras <- length(unique(res$years_5))
+    eras <- factor.2.number(unique(res$years_5))
+  } # End if loop
+  
+  # Easy way to pick 3 vs 5 year since I kept both columns but NA'ed the one not being used
+  if(all(is.na(res$years_5)))
+  {
+    n.eras <- length(unique(res$years_3))
+    eras <- factor.2.number(unique(res$years_3))
+  } # end if loop
+  
+  res <- st_as_sf(res,coords = c("X","Y"), crs = st_crs(mesh.grid),remove = F)
+  # Now for some reason my prediction grid doesn't quite line up with my prediciton mesh, so clip the mesh to match
+  res <- st_join(mesh.grid,res)
+  
+  for(n in min(eras):max(eras))
+  {
+    if(all(is.na(res$years_3)))
+    {
+    yrs <- paste0(substr(dat.final %>% filter(years_5 == n, survey == unique(res$survey)) %>% dplyr::summarise(min = min(year)),3,4),"-",
+                  substr(dat.final %>% dplyr::filter(years_5 == n, survey == unique(res$survey)) %>% dplyr::summarise(max = max(year)),3,4))
+    if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+    res$yrs[res$years_5==n] <- yrs
+    }
+    
+    if(all(is.na(res$years_5)))
+    {
+      yrs <- paste0(substr(dat.final %>% filter(years_3 == n, survey == unique(res$survey)) %>% dplyr::summarise(min = min(year)),3,4),"-",
+                    substr(dat.final %>% dplyr::filter(years_3 == n, survey == unique(res$survey)) %>% dplyr::summarise(max = max(year)),3,4))
+      if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+      res$yrs[res$years_3==n] <- yrs
+    }
+    
+  } # end   for(n in min(eras):max(eras))
+
+  res <- res[!is.na(res$yrs),]
+  # So calculating area is smart using that set units, though they are all idenitcal...
+  res$area <- res %>% st_area() %>% set_units("km^2")
+  res <- res %>% dplyr::filter(pred >= 0) # THIS IS SUPER IMPORTANT!!  WHAT IS THE probability we are looking at for this.
+  pred.res[[mod.names[i]]] <- res
+} # end for (i) loop
+
+# This is the thing I need to make the prediction plots and also for the COG and area calculations.
+pred.res <- do.call("rbind",pred.res) # This is a useful general purpose object I want
+```
+
+```{r overveiw-fig, echo=F, include=F, paged.print=FALSE,cache =T}
+################################
+###  Figures for the paper  ###
+################################
+
+# Plane old map
+bp <-  pecjector(area="GOM",plot=F,repo = 'github',add_layer = list(land ='grey',eez = 'eez',nafo = 'main',scale.bar = 'tl'),c_sys = 32619,buffer = 0.2) + theme_map()
+
+# Lets get a basemap set up for the rest of the show.
+bp.zoom <- pecjector(c_sys = 32619,area = list(x=c(580000,780000), y = c(4530000,4680000),crs = 32619),add_layer = list(land='grey',eez = 'eez',nafo = 'main',scale.bar = 'tl'),plot=F) #+ theme_map()
+
+# Same but with bathy underlain
+bp.bathy <-  pecjector(area="GOM",plot=F,repo = 'github',add_layer = list(land ='grey',eez = 'eez',nafo = 'main',scale.bar = 'tl',bathy = c(10,'s',200)),c_sys = 32619,buffer = 0.2) + theme_map()
+
+# Maybe I want this sometime.
+# bp.closures <- bp.bathy + geom_sf(data= CA1,fill = NA,color = 'red',size=1) + 
+#                           geom_sf(data= CA2,fill = NA,color = 'green',size=1) +
+#                           geom_sf(data= yt.closures, fill= NA,color = 'blue',size=1) + 
+#                           geom_sf(data=cod.closures, fill= NA,color = 'black',size=1) 
+# A figure providing a general overview of the area....
+
+# #  A nice clean polygon of the core of the GB area we want to deal with here.
+ clp.poly <- st_as_sf(data.frame(X = c(508000,508000,900000,650000,600000,550000),
+                                 Y=c(4540000,4350000,4674000,4674000,4661000,4622000),ID=1),coords = c("X","Y"),crs= 32619)
+ clp.poly <- st_cast(st_combine(clp.poly),"POLYGON")
+# # Now use the bigger clp with this other clip to get a nice clipped GB area...
+ clp.pred <- st_intersection(clp,clp.poly)
+
+#####
+# Figure Overview of the area, don't need to run this every time, if I want to change something uncomment the below
+#####
+labs <- st_as_sf(data.frame(X =c(600000, 680000), Y = c(4700000,4700000),lab = c("U.S.","Canada")),coords = c("X","Y"),crs=32619)
+ 
+plt.over <- bp.bathy + geom_sf(data = clp.pred,fill=NA,size = 1.5, color='orange') + 
+                       geom_sf(data= dat.sf,alpha = 0.25,shape=19,size=0.25, fill='black',color='black')+
+                       #geom_sf(data = CA1,fill = NA,size=1.25,color='blue') + geom_sf(data = CA2,fill = NA,size=1.25,color = 'white') + 
+                       #geom_sf(data = yt.closures,size=0.5,fill = 'lightgrey', alpha = 0.1,color = 'gold') + 
+                       #geom_sf(data = cod.closures,size=0.5,fill = 'lightgrey', alpha = 0.1,color = 'gold') + 
+                       geom_sf_label(data = labs,aes(label = lab),parse=T)  
+   
+ 
+save_plot(paste0(direct.proj,"Results/Figures/GB_overview.png"),plt.over,base_width =6,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/GB_overview.tiff"),plt.over,base_width =6,base_height =8,units='in',dpi=300)
+#over.plt <- paste0(direct.proj,"Results/Figures/GB_overview.png")
+```
+
+
+```{r mesh-plt, echo=F, include=F, paged.print=FALSE,cache =T}
+
+#####
+# Figure MESH don't need to run this every time, if I want to change something uncomment the below
+#####
+
+# I'm gonna need to plot my mesh on the nice bp object
+mesh.gf$crs <- crs("+init=epsg:32619") 
+# THis is a very minor tweak on a custom function from Finn Lindgren https://groups.google.com/forum/#!topic/r-inla-discussion-group/z1n1exlZrKM
+mesh.sf <- inla.mesh2sf(mesh.gf)
+
+plt.mesh <- pecjector(area = "GOM",buffer=0.4, c_sys = 32619,plot=F,
+                     add_layer = list(land ='grey',eez = 'eez',nafo = 'main',scale.bar = 'tl'),
+                     add_custom = list(obj = mesh.sf$triangles, size=0.5,color= 'grey30')) +
+                     theme_map()
+save_plot(paste0(direct.proj,"Results/Figures/mesh.tiff"),plt.mesh,base_width =8,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/mesh.png"),plt.mesh,base_width =8,base_height =8,units='in')
+#mesh.plt <- paste0(direct.proj,"Results/Figures/mesh.png")
+```
+
+```{r enviro-plt, echo=F, include=F, paged.print=FALSE,cache =T}
+theme_set(theme_few(base_size = 12))
+#####
+# Figure SST and Depth Mapping don't need to run this every time, if I want to change something uncomment the below
+#####
+# Perhaps I need Sed num in here now...
+#Depth and SST Maps - Commented out as these should be basically static plots
+#First, I need a map showing the spatial distribution of the SST and Depth
+#Don't run this unless we have to as these are pretty big, just want to load the object from this which is already saved.
+# And subset the sst and depth data to this.
+sst.gb <- st_intersection(sst.gb,clp.pred)
+depth.gb <- st_intersection(depth.gb,clp.pred)
+sed.gb <- st_intersection(sed.gb,clp.pred)
+# # # So for both species depth patterns over 150 meters are pretty flat, so I can just lump them altogether so we can see the key depth bits
+ depth.gb$layer[depth.gb$layer <= -150] <- -150
+
+
+sed.map <- pecjector(area = list(x=c(405000,790000), y = c(4400000,4800000),crs = 32619), c_sys = 32619,
+                      add_layer = list(land = 'grey',eez = 'eez',nafo = 'main',scale.bar = 'tl'),plot=F, legend =T,
+                      add_custom = list(obj = sed.gb,
+                                   scale = list(scale ='d',palette = viridis::cividis(3,begin=0.25,end=0.85,direction = -1),leg.name="")))
+
+sst.map <- pecjector(area = list(x=c(405000,790000), y = c(4400000,4800000),crs = 32619), c_sys = 32619,
+                      add_layer = list(land = 'grey',eez = 'eez',nafo = 'main',scale.bar = 'tl'),plot=F, legend =T,
+                      add_custom = list(obj = sst.gb,
+                                   scale = list(scale ='c',palette = pals::coolwarm(25),breaks = 9:15,leg.name="SST (°C)")))
+depth.map <- pecjector(area = list(x=c(405000,790000), y = c(4400000,4800000),crs = 32619), c_sys = 32619,
+                      add_layer = list(land = 'grey',eez = 'eez',nafo = 'main',scale.bar = 'tl'),plot=F, legend =T,
+                      add_custom = list(obj = depth.gb,
+                                   scale = list(scale ='c',palette = rev(pals::brewer.blues(25)),breaks = seq(0,-150,by=-25),leg.name="Depth (m)")))
+# # # Plotting this beast is really slow b/c the depth data are so fine scale so cache = T is handy to skip this...
+p.covars <- plot_grid(sst.map, depth.map,sed.map,align = "v", nrow = 3)
+save_plot(paste0(direct.proj,"Results/Figures/depth_sst_sed_fields.tiff"),p.covars,base_width =8,base_height =12,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/depth_sst_sed_fields.png"),p.covars,base_width =8,base_height =12,units='in')
+```
+
+```{r model-sel, echo=F, include=F, paged.print=FALSE,cache =T}
+theme_set(theme_few(base_size = 12))
+#####
+# Figure Model Selection with 1 FE.
+#####
+# First I think we need to discuss the model selection and show some of those plots
+plt.waic.fe <- plt.waic.fe +  theme_few(base_size = 12)
+save_plot(paste0(direct.proj,"Results/Figures/Diagnostics_single_fe_waic.tiff"),plt.waic.fe,base_width =16,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/Diagnostics_single_fe_waic.png"),plt.waic.fe,base_width = 16,base_height =8,units='in')
+
+#####
+# Figure Model Selection step 2 with multiple FE's using the 10 random field
+#####
+# First I think we need to discuss the model selection and show some of those plots
+# Possible plots here include these, I suspect a few of these might be supplements or I do like pointing folks to my
+plt.waic.10 <- plt.waic.10 +  theme_few(base_size = 12)
+# Github repo where you can run the shiny app and look at the output rather than a big boring appendix.
+save_plot(paste0(direct.proj,"Results/Figures/Diagnostics_2_covars_fe_waic.tiff"),plt.waic.10,base_width =16,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/Diagnostics_2_covars_fe_waic.png"),plt.waic.10,base_width =16,base_height =8,units='in')
+
+#####
+# Figure Model Selection step 3 with most complex models, using 5 year random field
+#####
+# First I think we need to discuss the model selection and show some of those plots
+# Possible plots here include these, I suspect a few of these might be supplements or I do like pointing folks to my
+plt.waic.5.cod<- plt.waic.5.cod +  theme_few(base_size = 12) + xlab("")
+plt.waic.5.yt<- plt.waic.5.yt +  theme_few(base_size = 12)
+plt.waic.5 <- plot_grid(plt.waic.5.cod,plt.waic.5.yt,nrow=2)
+# Github repo where you can run the shiny app and look at the output rather than a big boring appendix.
+save_plot(paste0(direct.proj,"Results/Figures/Diagnostics_3_covars_fe_waic.tiff"),plt.waic.5,base_width =16,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/Diagnostics_3_covars_fe_waic.png"),plt.waic.5,base_width =16,base_height =8,units='in')
+
+####
+# Figure Model Selection for the Random fields
+####
+plt.cod.waic.rf <-  plt.cod.waic.rf +  theme_few(base_size = 12) + xlab("")
+plt.yt.5.10.waic.rf <-  plt.yt.5.10.waic.rf +  theme_few(base_size = 12)
+plt.yt.3.5.waic.rf <-  plt.yt.3.5.waic.rf +  theme_few(base_size = 12)
+plt.rf.waic <- plot_grid(plt.cod.waic.rf,plt.yt.5.10.waic.rf,plt.yt.3.5.waic.rf,nrow=3)
+# # Github repo where you can run the shiny app and look at the output rather than a big boring appendix.
+save_plot(paste0(direct.proj,"Results/Figures/Diagnostics_rf_waic.tiff"),plt.rf.waic,base_width =16,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/Diagnostics_rf_waic.png"),plt.rf.waic,base_width =16,base_height =8,units='in')
+```
+
+```{r cod-covariate-res-plt, echo=F, include=F, paged.print=FALSE,cache =T}
+theme_set(theme_few(base_size = 12))
+# Then I think we need to show the depth and sst relationships for each model and survey, 
+####
+# Figure Cod Now we show the cod results, put depth and SST on the same figure. For cod we use the 5 year field and SST + Dep model
+####
+
+# Get the data for SST and Depth for each model.
+dat.winter <- dat.final %>% dplyr::filter(survey == "RV")
+dat.winter$depth_log <- log(-dat.winter$comldepth)
+dat.winter$depth_cen <-  dat.winter$depth_log - mean(dat.winter$depth_log) 
+dat.winter$sst_avg_cen <- scale(dat.winter$sst_avg)
+# Spring survey data...
+dat.spring <- dat.final %>% dplyr::filter(survey == "nmfs-spring")
+dat.spring$depth_log <- log(-dat.spring$comldepth)
+dat.spring$depth_cen <-  dat.spring$depth_log - mean(dat.spring$depth_log) 
+dat.spring$sst_avg_cen <- scale(dat.spring$sst_avg)
+# Fall survey data
+dat.fall <- dat.final %>% dplyr::filter(survey == "nmfs-fall")
+dat.fall$depth_log <- log(-dat.fall$comldepth)
+dat.fall$depth_cen <-  dat.fall$depth_log - mean(dat.fall$depth_log) 
+dat.fall$sst_avg_cen <- scale(dat.fall$sst_avg)      
+## Now get the Intercept, depth terms, and sst terms from your model as appropriate
+int.cod.winter <- all.mod.fixed[["cod_PA RV survey model.depth.sst_st_5"]]
+depth.cod.winter <- all.mod.depth[["cod_PA RV survey model.depth.sst_st_5"]]
+sst.cod.winter <- all.mod.sst[["cod_PA RV survey model.depth.sst_st_5"]]
+depth.cod.winter$response <- inv.logit(depth.cod.winter$mean + int.cod.winter$mean[1])
+depth.cod.winter$UCI <- inv.logit(depth.cod.winter$`0.975quant` + int.cod.winter$mean[1])
+depth.cod.winter$LCI <- inv.logit(depth.cod.winter$`0.025quant` + int.cod.winter$mean[1])
+depth.cod.winter$covar <- exp(depth.cod.winter$ID + mean(dat.winter$depth_log))
+depth.cod.winter$survey <- "Winter"
+depth.cod.winter$fe <- "Depth"
+sst.cod.winter$response <- inv.logit(sst.cod.winter$mean + int.cod.winter$mean[1])
+sst.cod.winter$UCI <- inv.logit(sst.cod.winter$`0.975quant` + int.cod.winter$mean[1])
+sst.cod.winter$LCI <- inv.logit(sst.cod.winter$`0.025quant` + int.cod.winter$mean[1])
+sst.cod.winter$covar <- sst.cod.winter$ID* attr(dat.winter$sst_avg_cen,"scaled:scale") + attr(dat.winter$sst_avg_cen,"scaled:center")
+sst.cod.winter$survey <- "Winter"
+sst.cod.winter$fe <- "SST"
+# spring survey
+int.cod.spring <- all.mod.fixed[["cod_PA nmfs-spring survey model.depth.sst_st_5"]]
+depth.cod.spring <- all.mod.depth[["cod_PA nmfs-spring survey model.depth.sst_st_5"]]
+sst.cod.spring <- all.mod.sst[["cod_PA nmfs-spring survey model.depth.sst_st_5"]]
+depth.cod.spring$response <- inv.logit(depth.cod.spring$mean + int.cod.spring$mean[1])
+depth.cod.spring$UCI <- inv.logit(depth.cod.spring$`0.975quant` + int.cod.spring$mean[1])
+depth.cod.spring$LCI <- inv.logit(depth.cod.spring$`0.025quant` + int.cod.spring$mean[1])
+depth.cod.spring$covar <- exp(depth.cod.spring$ID + mean(dat.spring$depth_log))
+depth.cod.spring$survey <- "Spring"
+depth.cod.spring$fe <- "Depth"
+sst.cod.spring$response <- inv.logit(sst.cod.spring$mean + int.cod.spring$mean[1])
+sst.cod.spring$UCI <- inv.logit(sst.cod.spring$`0.975quant` + int.cod.spring$mean[1])
+sst.cod.spring$LCI <- inv.logit(sst.cod.spring$`0.025quant` + int.cod.spring$mean[1])
+sst.cod.spring$covar <- sst.cod.spring$ID* attr(dat.spring$sst_avg_cen,"scaled:scale") + attr(dat.spring$sst_avg_cen,"scaled:center")
+sst.cod.spring$survey <- "Spring"
+sst.cod.spring$fe <- "SST"
+# Fall survey
+int.cod.fall <- all.mod.fixed[["cod_PA nmfs-fall survey model.depth.sst_st_5"]]
+depth.cod.fall <- all.mod.depth[["cod_PA nmfs-fall survey model.depth.sst_st_5"]]
+sst.cod.fall <- all.mod.sst[["cod_PA nmfs-fall survey model.depth.sst_st_5"]]
+depth.cod.fall$response <- inv.logit(depth.cod.fall$mean + int.cod.fall$mean[1])
+depth.cod.fall$UCI <- inv.logit(depth.cod.fall$`0.975quant` + int.cod.fall$mean[1])
+depth.cod.fall$LCI <- inv.logit(depth.cod.fall$`0.025quant` + int.cod.fall$mean[1])
+depth.cod.fall$covar <- exp(depth.cod.fall$ID + mean(dat.fall$depth_log))
+depth.cod.fall$survey <- "Fall"
+depth.cod.fall$fe <- "Depth"
+sst.cod.fall$response <- inv.logit(sst.cod.fall$mean + int.cod.fall$mean[1])
+sst.cod.fall$UCI <- inv.logit(sst.cod.fall$`0.975quant` + int.cod.fall$mean[1])
+sst.cod.fall$LCI <- inv.logit(sst.cod.fall$`0.025quant` + int.cod.fall$mean[1])
+sst.cod.fall$covar <- sst.cod.fall$ID* attr(dat.fall$sst_avg_cen,"scaled:scale") + attr(dat.fall$sst_avg_cen,"scaled:center")
+sst.cod.fall$survey <- "Fall"
+sst.cod.fall$fe <- "SST"
+
+# Stitch it all together into something very tidyverse.
+cod.fe.res <- data.frame(response = c(depth.cod.winter$response,sst.cod.winter$response,
+                                      depth.cod.spring$response,sst.cod.spring$response,
+                                      depth.cod.fall$response,sst.cod.fall$response),
+                         covar    = c(depth.cod.winter$covar,sst.cod.winter$covar,
+                                      depth.cod.spring$covar,sst.cod.spring$covar,
+                                      depth.cod.fall$covar,sst.cod.fall$covar),
+                         UCI      = c(depth.cod.winter$UCI,sst.cod.winter$UCI,
+                                      depth.cod.spring$UCI,sst.cod.spring$UCI,
+                                      depth.cod.fall$UCI,sst.cod.fall$UCI),
+                         LCI      = c(depth.cod.winter$LCI,sst.cod.winter$LCI,
+                                      depth.cod.spring$LCI,sst.cod.spring$LCI,
+                                      depth.cod.fall$LCI,sst.cod.fall$LCI),
+                         survey   = factor(c(depth.cod.winter$survey,sst.cod.winter$survey,
+                                      depth.cod.spring$survey,sst.cod.spring$survey,
+                                      depth.cod.fall$survey,sst.cod.fall$survey),levels = c("Winter","Spring","Fall")),
+                         fe    = c(depth.cod.winter$fe,sst.cod.winter$fe,
+                                      depth.cod.spring$fe,sst.cod.spring$fe,
+                                      depth.cod.fall$fe,sst.cod.fall$fe))
+                       
+# Let's only plot this up to a depth of 300 meters, past that isn't particularly interesting
+cod.fe.res <- cod.fe.res %>% filter(covar <= 300)
+
+# So this should be the money plot
+plt.cod.fe <- ggplot(cod.fe.res) + geom_line(aes(x = covar, y = response)) + 
+                     geom_ribbon(aes(x = covar,ymax = UCI,ymin = LCI),fill = 'blue',alpha=0.5)+
+                     facet_wrap(~fe + survey,scales='free_x',ncol = 3,strip.position = 'top') + 
+                     scale_x_continuous(breaks=breaks_fun) + 
+                     xlab("") + ylab("Probability") + ylim(c(0,1))
+
+save_plot(paste0(direct.proj,"Results/Figures/Cod_fixed_effects.tiff"),plt.cod.fe,base_width =12,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/Cod_fixed_effects.png"),plt.cod.fe,base_width =12,base_height =8,units='in')
+```
+
+```{r yt-covariate-res-plot, echo=F, include=F, paged.print=FALSE,cache =T}
+theme_set(theme_few(base_size = 12))
+####
+# Figure YT Now we show the Yellowtail  results, put depth and SST on the same figure. Note that I use the 5 year Yellowtial model for
+# the Fall as this was the preferred RF for these data.
+####
+
+int.yt.winter <- all.mod.fixed[["yt_PA RV survey model.depth.sed.sst_st_3"]]
+depth.yt.winter <- all.mod.depth[["yt_PA RV survey model.depth.sed.sst_st_3"]]
+sst.yt.winter <- all.mod.sst[["yt_PA RV survey model.depth.sed.sst_st_3"]]
+depth.yt.winter$response <- inv.logit(depth.yt.winter$mean + int.yt.winter$mean[1])
+depth.yt.winter$UCI <- inv.logit(depth.yt.winter$`0.975quant` + int.yt.winter$mean[1])
+depth.yt.winter$LCI <- inv.logit(depth.yt.winter$`0.025quant` + int.yt.winter$mean[1])
+depth.yt.winter$covar <- exp(depth.yt.winter$ID + mean(dat.winter$depth_log))
+depth.yt.winter$survey <- "Winter"
+depth.yt.winter$fe <- "Depth"
+# Let's only plot this up to a depth of 300 meters, past that isn't particularly interesting, have to do this here b/c of factor in covar for yt
+depth.yt.winter <- depth.yt.winter %>% filter(covar <= 300)
+sst.yt.winter$response <- inv.logit(sst.yt.winter$mean + int.yt.winter$mean[1])
+sst.yt.winter$UCI <- inv.logit(sst.yt.winter$`0.975quant` + int.yt.winter$mean[1])
+sst.yt.winter$LCI <- inv.logit(sst.yt.winter$`0.025quant` + int.yt.winter$mean[1])
+sst.yt.winter$covar <- sst.yt.winter$ID* attr(dat.winter$sst_avg_cen,"scaled:scale") + attr(dat.winter$sst_avg_cen,"scaled:center")
+sst.yt.winter$survey <- "Winter"
+sst.yt.winter$fe <- "SST"
+int.yt.winter$response <-  c(inv.logit(int.yt.winter$mean[1]),inv.logit(int.yt.winter$mean[1] + int.yt.winter$mean[2:3]))
+int.yt.winter$UCI <-  c(inv.logit(int.yt.winter$`0.975quant`[1]),inv.logit(int.yt.winter$mean[1] + int.yt.winter$`0.975quant`[2:3]))
+int.yt.winter$LCI <-  c(inv.logit(int.yt.winter$`0.025quant`[1]),inv.logit(int.yt.winter$mean[1] + int.yt.winter$`0.025quant`[2:3]))
+int.yt.winter$survey <- "Winter"
+int.yt.winter$fe <- "Sed"
+rownames(int.yt.winter) <- c("Other", "Gravel-Sand","Sand") # Sediment 3 is Gravel sand, and 4 is Sand from USGS metadata
+# spring survey
+int.yt.spring <- all.mod.fixed[["yt_PA nmfs-spring survey model.depth.sed.sst_st_3"]]
+depth.yt.spring <- all.mod.depth[["yt_PA nmfs-spring survey model.depth.sed.sst_st_3"]]
+sst.yt.spring <- all.mod.sst[["yt_PA nmfs-spring survey model.depth.sed.sst_st_3"]]
+depth.yt.spring$response <- inv.logit(depth.yt.spring$mean + int.yt.spring$mean[1])
+depth.yt.spring$UCI <- inv.logit(depth.yt.spring$`0.975quant` + int.yt.spring$mean[1])
+depth.yt.spring$LCI <- inv.logit(depth.yt.spring$`0.025quant` + int.yt.spring$mean[1])
+depth.yt.spring$covar <- exp(depth.yt.spring$ID + mean(dat.spring$depth_log))
+depth.yt.spring$survey <- "Spring"
+depth.yt.spring$fe <- "Depth"
+# Let's only plot this up to a depth of 300 meters, past that isn't particularly interesting, have to do this here b/c of factor in covar for yt
+depth.yt.spring <- depth.yt.spring %>% filter(covar <= 300)
+
+sst.yt.spring$response <- inv.logit(sst.yt.spring$mean + int.yt.spring$mean[1])
+sst.yt.spring$UCI <- inv.logit(sst.yt.spring$`0.975quant` + int.yt.spring$mean[1])
+sst.yt.spring$LCI <- inv.logit(sst.yt.spring$`0.025quant` + int.yt.spring$mean[1])
+sst.yt.spring$covar <- sst.yt.spring$ID* attr(dat.spring$sst_avg_cen,"scaled:scale") + attr(dat.spring$sst_avg_cen,"scaled:center")
+sst.yt.spring$survey <- "Spring"
+sst.yt.spring$fe <- "SST"
+int.yt.spring$response <-  c(inv.logit(int.yt.spring$mean[1]),inv.logit(int.yt.spring$mean[1] + int.yt.spring$mean[2:3]))
+int.yt.spring$UCI <-  c(inv.logit(int.yt.spring$`0.975quant`[1]),inv.logit(int.yt.spring$mean[1] + int.yt.spring$`0.975quant`[2:3]))
+int.yt.spring$LCI <-  c(inv.logit(int.yt.spring$`0.025quant`[1]),inv.logit(int.yt.spring$mean[1] + int.yt.spring$`0.025quant`[2:3]))
+int.yt.spring$survey <- "Spring"
+int.yt.spring$fe <- "Sed"
+rownames(int.yt.spring) <-  c("Other", "Gravel-Sand","Sand") # Sediment 3 is Gravel sand, and 4 is Sand from USGS metadata
+# Fall survey
+int.yt.fall <- all.mod.fixed[["yt_PA nmfs-fall survey model.depth.sed.sst_st_5"]]
+depth.yt.fall <- all.mod.depth[["yt_PA nmfs-fall survey model.depth.sed.sst_st_5"]]
+sst.yt.fall <- all.mod.sst[["yt_PA nmfs-fall survey model.depth.sed.sst_st_5"]]
+depth.yt.fall$response <- inv.logit(depth.yt.fall$mean + int.yt.fall$mean[1])
+depth.yt.fall$UCI <- inv.logit(depth.yt.fall$`0.975quant` + int.yt.fall$mean[1])
+depth.yt.fall$LCI <- inv.logit(depth.yt.fall$`0.025quant` + int.yt.fall$mean[1])
+depth.yt.fall$covar <- exp(depth.yt.fall$ID + mean(dat.fall$depth_log))
+depth.yt.fall$survey <- "Fall"
+depth.yt.fall$fe <- "Depth"
+# Let's only plot this up to a depth of 300 meters, past that isn't particularly interesting, have to do this here b/c of factor in covar for yt
+depth.yt.fall <- depth.yt.fall %>% filter(covar <= 300)
+
+
+sst.yt.fall$response <- inv.logit(sst.yt.fall$mean + int.yt.fall$mean[1])
+sst.yt.fall$UCI <- inv.logit(sst.yt.fall$`0.975quant` + int.yt.fall$mean[1])
+sst.yt.fall$LCI <- inv.logit(sst.yt.fall$`0.025quant` + int.yt.fall$mean[1])
+sst.yt.fall$covar <- sst.yt.fall$ID* attr(dat.fall$sst_avg_cen,"scaled:scale") + attr(dat.fall$sst_avg_cen,"scaled:center")
+sst.yt.fall$survey <- "Fall"
+sst.yt.fall$fe <- "SST"
+int.yt.fall$response <-  c(inv.logit(int.yt.fall$mean[1]),inv.logit(int.yt.fall$mean[1] + int.yt.fall$mean[2:3]))
+int.yt.fall$UCI <-  c(inv.logit(int.yt.fall$`0.975quant`[1]),inv.logit(int.yt.fall$mean[1] + int.yt.fall$`0.975quant`[2:3]))
+int.yt.fall$LCI <-  c(inv.logit(int.yt.fall$`0.025quant`[1]),inv.logit(int.yt.fall$mean[1] + int.yt.fall$`0.025quant`[2:3]))
+int.yt.fall$survey <- "Fall"
+int.yt.fall$fe <- "Sed"
+rownames(int.yt.fall) <-  c("Other", "Gravel-Sand","Sand") # Sediment 3 is Gravel sand, and 4 is Sand from USGS metadata
+
+# Stitch it all together into something very tidyverse.
+yt.fe.res <- data.frame(response = c(depth.yt.winter$response,sst.yt.winter$response,int.yt.winter$response,
+                                      depth.yt.spring$response,sst.yt.spring$response,int.yt.spring$response,
+                                      depth.yt.fall$response,sst.yt.fall$response,int.yt.fall$response),
+                         covar    = c(depth.yt.winter$covar,sst.yt.winter$covar, rownames(int.yt.winter),
+                                      depth.yt.spring$covar,sst.yt.spring$covar, rownames(int.yt.spring),
+                                      depth.yt.fall$covar,sst.yt.fall$covar,rownames(int.yt.fall)),
+                         UCI      = c(depth.yt.winter$UCI,sst.yt.winter$UCI,int.yt.winter$UCI,
+                                      depth.yt.spring$UCI,sst.yt.spring$UCI,int.yt.spring$UCI,
+                                      depth.yt.fall$UCI,sst.yt.fall$UCI,int.yt.fall$UCI),
+                         LCI      = c(depth.yt.winter$LCI,sst.yt.winter$LCI,int.yt.winter$LCI,
+                                      depth.yt.spring$LCI,sst.yt.spring$LCI,int.yt.spring$LCI,
+                                      depth.yt.fall$LCI,sst.yt.fall$LCI,int.yt.fall$LCI),
+                         survey   = factor(c(depth.yt.winter$survey,sst.yt.winter$survey,int.yt.winter$survey,
+                                      depth.yt.spring$survey,sst.yt.spring$survey,int.yt.spring$survey,
+                                      depth.yt.fall$survey,sst.yt.fall$survey,int.yt.fall$survey),levels = c("Winter","Spring","Fall")),
+                         fe    = c(depth.yt.winter$fe,sst.yt.winter$fe,int.yt.winter$fe,
+                                      depth.yt.spring$fe,sst.yt.spring$fe,int.yt.spring$fe,
+                                      depth.yt.fall$fe,sst.yt.fall$fe,int.yt.fall$fe))
+# Generally in the 60-80 range
+#yt.fe.res %>% filter(response > 0.1)
+
+plt.yt.sst.fe <- ggplot(yt.fe.res %>% filter(fe == "SST")) + geom_line(aes(x = as.numeric(covar), y = response)) + 
+                     geom_ribbon(aes(x = as.numeric(covar),ymax = UCI,ymin = LCI),fill = 'blue',alpha=0.5)+
+                     facet_wrap(~fe + survey,scales='free',ncol = 3,strip.position = 'top') + 
+                     scale_x_continuous(breaks=breaks_fun) + 
+                     xlab("") + ylab("") + ylim(c(0,0.55))
+
+plt.yt.dep.fe <- ggplot(yt.fe.res %>% filter(fe == "Depth")) + geom_line(aes(x = as.numeric(covar), y = response)) + 
+                     geom_ribbon(aes(x = as.numeric(covar),ymax = UCI,ymin = LCI),fill = 'blue',alpha=0.5)+
+                     facet_wrap(~fe + survey,scales='free',ncol = 3,strip.position = 'top') + 
+                     scale_x_continuous(breaks=breaks_fun) + 
+                     xlab("") + ylab("Probability") + ylim(c(0,0.55))
+
+plt.yt.fact.fe <- ggplot(yt.fe.res %>% filter(fe == "Sed")) + 
+                               geom_point(aes(x = factor(covar, levels = c("Other","Gravel-Sand","Sand")), y = response)) + 
+                               geom_errorbar(aes(x = factor(covar, levels = c("Other","Gravel-Sand","Sand")),ymax = UCI,ymin = LCI),width=0)+
+                               facet_wrap(~fe + survey,scales='free',ncol = 3,strip.position = 'top') + 
+                               xlab("") + ylab("") + ylim(c(0,0.55))
+
+plt.yt.fe <- plot_grid(plt.yt.sst.fe,plt.yt.dep.fe,plt.yt.fact.fe,align = 'v',nrow=3,rel_heights = c(1,1))
+
+
+save_plot(paste0(direct.proj,"Results/Figures/yt_fixed_effects.tiff"),plt.yt.fe,base_width =12,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/yt_fixed_effects.png"),plt.yt.fe,base_width =12,base_height =8,units='in')
+```
+
+```{r COG-plot, echo=F, include=F, paged.print=FALSE,cache =T}
+theme_set(theme_few(base_size = 12))
+#####
+# Figure Center of gravity of the species distributions has shifted
+#####
+# So here we need the predicted field for each model. I think we want to show how COG has moved for cod and yellowtail
+# and have a panel for each survey, might end up being better as 2 figures, not sure yet.  But we'll want 6 cogs
+# I also want to clean up the names in pred.dat (could come in handy throughout rather that using the labeller everywhere..
+
+names.survs <- unique(pred.res$model)
+pred.cog <- NULL
+
+for(i in 1:length(names.survs))
+{
+  res <- pred.res %>% filter(model == names.survs[i])
+  
+  if(all(is.na(res$years_3)))
+  {
+    n.eras <- length(unique(res$years_5))
+    eras <- factor.2.number(unique(res$years_5))
+    res <- res[order(res$years_5),]
+  } # End if loop
+  
+  # Easy way to pick 3 vs 5 year since I kept both columns but NA'ed the one not being used
+  if(all(is.na(res$years_5)))
+  {
+    n.eras <- length(unique(res$years_3))
+    eras <- as.numeric(unique(res$years_3))
+    res <- res[order(res$years_3),]
+  } # end if loop
+  # Make this into an sf object
+ # res <- st_as_sf(res,coords = c("X","Y"), crs = st_crs(mesh.grid),remove = F)
+  # Combine the mesh into the results so we have predictions at each mesh element
+  #res <- st_join(mesh.grid,res)  
+  # Get the years right for each input.
+  for(n in min(eras):max(eras))
+  {
+    if(all(is.na(res$years_3)))
+    {
+    yrs <- paste0(substr(dat.final %>% filter(years_5 == n, survey == unique(res$survey)) %>% dplyr::summarise(min = min(year)),3,4),"-",
+                  substr(dat.final %>% dplyr::filter(years_5 == n, survey == unique(res$survey)) %>% dplyr::summarise(max = max(year)),3,4))
+    if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+    res$yrs[res$years_5==n] <- yrs
+    }
+    
+    if(all(is.na(res$years_5)))
+    {
+      yrs <- paste0(substr(dat.final %>% filter(years_3 == n, survey == unique(res$survey)) %>% dplyr::summarise(min = min(year)),3,4),"-",
+                    substr(dat.final %>% dplyr::filter(years_3 == n, survey == unique(res$survey)) %>% dplyr::summarise(max = max(year)),3,4))
+      if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+      res$yrs[res$years_3==n] <- yrs
+    }
+    
+  } # end   for(n in min(eras):max(eras))
+
+  res <- res[!is.na(res$yrs),]
+  # So calculating area is smart using that set units, though they are all idenitcal...
+  res$area <- res %>% st_area() %>% set_units("km^2")
+  res <- res %>% filter(pred >= hi.prob) # THIS IS SUPER IMPORTANT!!  WHAT IS THE probability we are looking at for this.
+
+  cog_n_area <- as.data.table(res)[,cog.calc(X,Y,pred), by = yrs]
+  cog_n_area <- cog_n_area[order(cog_n_area$yrs)]
+  cog_n_area <- st_as_sf(cog_n_area,coords = c('x','y'), crs= st_crs(mesh.grid), remove=F)
+  area <- res %>% group_by(yrs) %>% dplyr::summarise(area = sum(area))
+  st_geometry(area) <- NULL
+  cog_n_area$area <- area$area
+  # This object has what we need for COG and area calcs.  
+  cog_n_area$mod <- names.survs[i]
+  cog_n_area$species <- res$species[1]
+  cog_n_area$survey <- res$survey[1]
+  pred.cog[[names.survs[i]]] <- cog_n_area
+}
+
+
+cog.n.area <- do.call('rbind',pred.cog)
+# Make names nice...
+cog.n.area$species[cog.n.area$species == "yt_PA"] <- "Yellowtail"
+cog.n.area$species[cog.n.area$species == "cod_PA"] <- "Cod"
+cog.n.area$survey[cog.n.area$survey == "nmfs-spring"] <- "Spring"
+cog.n.area$survey[cog.n.area$survey == "nmfs-fall"] <- "Fall"
+cog.n.area$survey[cog.n.area$survey == "RV"] <- "Winter"
+cog.n.area$survey <- factor(cog.n.area$survey, levels = c("Winter","Spring","Fall"))
+#cog.n.area$eras <- as.numeric(factor(cog.n.area$yrs, labels =1:length(unique(cog.n.area$yrs))))
+
+
+plt.cog <-  bp.zoom + geom_label(data = cog.n.area,aes(x=x, y = y,label=substr(yrs,3,8)),nudge_x = -7500,nudge_y=3500,size=2) +
+                  facet_wrap(~species + survey) + 
+                  geom_errorbar(data = cog.n.area,aes(x= x,ymin=y - 3*se.y,ymax=y + 3*se.y),colour = "blue",width=0,size=1)  +
+                  geom_errorbar(data = cog.n.area,aes(y= y,xmin=x - 3*se.x,xmax=x + 3*se.x),colour = "blue",width=0,size=1)  +
+                  xlab("") + ylab("") + theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
+                                              axis.text.x = element_text( size = 10),
+                                              axis.text.y = element_text( size = 10))
+
+
+save_plot(paste0(direct.proj,"Results/Figures/center_of_gravity.tiff"),plt.cog,base_width =11,base_height =11,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/center_of_gravity.png"),plt.cog,base_width =11,base_height =11,units='in')
+```
+
+```{r area-plot, echo=F, include=F, paged.print=FALSE,cache =T}
+theme_set(theme_few(base_size = 12))
+### Now how has the area changed over time...
+# Things will get more complicated here as I have 3 year and 5 year fields mixed together for Yellowtail
+# I'll need to make a more general axis for the x's somehow...
+# I need to get the last year on here for the figure as well.
+tmp <- cog.n.area[grep("16",cog.n.area$yrs),]
+tmp$yrs <- "2016"
+rownames(tmp) <- paste0(rownames(tmp),".1")
+cog.n.area.4.plt <- bind_rows(cog.n.area,tmp)
+cols <- addalpha(c("black", "blue","darkgreen"),alpha=0.5) 
+plt.area <- ggplot(cog.n.area.4.plt) + geom_step(aes(x = as.numeric(substr(yrs,1,4)), y = as.numeric(area), group = survey,color= survey),lwd=1.5) +  
+                                 facet_wrap(~ species , scales = 'free_x') + ylab("Area (km²)") + xlab("")+# Get the squared with Alt + 0178.. bam
+                                 scale_y_continuous(breaks = seq(0,40000,2500)) + 
+                                 scale_x_continuous(breaks = seq(1970,2020,5)) +
+                                 scale_color_manual(values = cols)
+
+save_plot(paste0(direct.proj,"Results/Figures/Area_ts_high.tiff"),plt.area,base_width =12,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/Area_ts_high.png"),plt.area,base_width =12,base_height =8,units='in')
+```
+
+```{r Can-us-area-plot, echo=F, include=F, paged.print=FALSE,cache =T}
+theme_set(theme_few(base_size = 12))
+########## Canada VS US plot #######################
+
+temp <- tempfile()
+      # Download this to the temp directory you created above
+download.file("https://raw.githubusercontent.com/Mar-scal/GIS_layers/master/EEZ/EEZ.zip", temp)
+# Figure out what this file was saved as
+temp2 <- tempfile()
+# Unzip it
+unzip(zipfile=temp, exdir=temp2)
+# Now read in the shapefile
+eez.all <- st_read(paste0(temp2, "/EEZ.shp"))
+rm(temp,temp2)
+clp.eez <- st_as_sf(data.frame(X = c(-70,-70,-62.2,-62.2),Y = c(39,44,44,39)),coords = c("X","Y"),crs = 4326)
+clp.eez <- st_cast(st_combine(clp.eez),"POLYGON")
+eez.all <- eez.all %>% st_transform(4326)
+tmp <- st_intersection(eez.all,clp.eez)
+eez.can <- concaveman(tmp)
+eez.can <- eez.can %>% st_transform(32619)
+
+pf.res <- pred.res
+
+pf.res$area <- pf.res %>% st_area() %>% set_units("km^2")
+# Now who is in canada and who isn't...
+
+pf.can <- st_intersection(pf.res,eez.can)
+pf.can$country <- "Canada"
+pf.us <- st_difference(pf.res,eez.can)
+pf.us$country <- en2fr("USA",french)
+pf.can$area <-  pf.can %>% st_area() %>% set_units("km^2") %>% as.numeric()
+pf.us$area <-  pf.us %>% st_area() %>% set_units("km^2") %>% as.numeric()
+pf.area <- bind_rows(pf.us, pf.can)
+
+#pf.hi <- pf.winter.yt %>% dplyr::filter(pred >= hi.prob)
+area.era.pred <- pf.area  %>% dplyr::filter(pred >= hi.prob) %>% 
+                        group_by(country,model,yrs,species) %>% 
+                        dplyr::summarize(tot.area = as.numeric(sum(area)))
+
+area.era.pred$tot.area <- as.numeric(area.era.pred$tot.area)                             
+area.era.pred$species[area.era.pred$species == "yt_PA"] <- en2fr("Yellowtail",french,case = 'title')
+area.era.pred$species[area.era.pred$species == "cod_PA"] <- en2fr("Cod",french,case = 'title')
+area.era.pred$model[grepl("RV",area.era.pred$model)] <- en2fr("Winter",french,case = 'title') 
+area.era.pred$model[grepl("spring",area.era.pred$model)] <- en2fr("Spring",french,case = 'title')
+area.era.pred$model[grepl("fall",area.era.pred$model)] <- en2fr("Fall",french,case = 'title')
+area.era.pred$model <- factor(area.era.pred$model, levels = c(en2fr("Winter",french,case = 'title'),
+                                                              en2fr("Spring",french,case = 'title'),
+                                                              en2fr("Fall",french,case = 'title')))
+
+
+tmp <- area.era.pred[grep("16",area.era.pred$yrs),]
+tmp$yrs <- "2016"
+rownames(tmp) <- paste0(rownames(tmp),".1")
+area.era.pred.4.plt <- bind_rows(area.era.pred,tmp)
+cols <- addalpha(c("black", "blue","darkgreen"),alpha=0.5) 
+
+plt.area.can.vs.us <- ggplot(area.era.pred.4.plt) + geom_step(aes(x=as.numeric(substr(yrs,1,4)), y = tot.area,color = model,group=model),lwd=1.5) + facet_wrap(~species + country ) + scale_color_manual(values =cols) +  scale_x_continuous(breaks = seq(1970,2020,5)) + 
+  xlab("")  +  ylab(paste0(en2fr("Area",french,case="title"), " (km²)")) + theme(legend.title = element_blank())
+
+save_plot(paste0(direct.proj,"Results/Figures/Area_can_vs_us_ts_high.tiff"),plt.area.can.vs.us,base_width =11,base_height =7,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/Area_can_vs_us_ts_high.png"),plt.area.can.vs.us,base_width =11,base_height =7,units='in')
+```
+
+```{r cross-fold-plot, echo=F, include=F, paged.print=FALSE,cache =T}
+theme_set(theme_few(base_size = 12))
+#####
+# Figures for 5 fold cross validation and Prediction
+#####
+# If we had 0 predictive power our RMSE would be around this, 
+# The runif is a field of random numbers between 0 and 1, while the rbinom is 50 0s and 1s with a 50-50 probabilty 
+# This probability  doesn't seem to matter for RMSE calcs the runif really generates the randomness of no predictability.
+null.rmse <- NA
+set.seed(123)
+for(i in 1:10000) null.rmse[i] <- RMSE(runif(50,0,1),rbinom(50,1,0.5)) # using 50 as this is roughly number of stations, but # doesn't actually matter.
+mn.crap.rmse <- mean(null.rmse)
+cols <- addalpha(c("blue", "black"),alpha=0.5) 
+
+fold.res$model.id <- factor(fold.res$model.id, levels = c("Intercept","Depth","SST","Depth + SST"))
+mn.folds <- ggplot(fold.res) + geom_point(aes(y = mn, x= model.id,colour = type),position = position_dodge(width=0.3)) + ylab("Mean Error") + xlab("")+
+                               facet_wrap(~species,scales = 'free_x')+ scale_color_manual(values = cols) +
+                               theme(legend.title = element_blank())
+
+rmse.folds <- ggplot(fold.res) + geom_point(aes(y = rmse, x= model.id,colour = type),position = position_dodge(width=0.3)) + 
+                                 ylab("RMSE") + xlab("") + ylim(c(0,NA)) +
+                                 facet_wrap(~species,scales = 'free_x')  + scale_color_manual(values = cols) +
+                                 geom_hline(yintercept = mn.crap.rmse,linetype = 2,color = 'red') + theme(legend.title = element_blank()) 
+                                
+plt.folds <- plot_grid(mn.folds,rmse.folds,nrow=2)
+save_plot(paste0(direct.proj,"Results/Figures/cross_fold_validation.tiff"),plt.folds,base_width =12,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/cross_fold_validation.png"),plt.folds,base_width =12,base_height =8,units='in')
+
+```
+
+
+```{r resid-vs-pred-plot, echo=F, include=F, paged.print=FALSE,cache =T}
+theme_set(theme_few(base_size = 12))
+## This is the final bit that will need tidied up with the new results, the predictions from all 6 models but 
+# with an intercept comparison as well.  This figure probably looks much different!
+# Now here's how well the prediction work for spawning aggregations between 2017-2019...
+all.resids$type <- "Model residual"
+all.resids$type[all.resids$year %in% 2017:2019] <- 'Model predicted'
+all.resids$species[all.resids$species == 'yt_PA'] <- "Yellowtail"
+all.resids$species[all.resids$species == 'cod_PA'] <- "Cod"
+all.resids$survey <- factor(all.resids$survey,levels = c("Winter","Spring","Fall"))
+all.resids$model.id[all.resids$model.id == 'intercept'] <- "No covariates"
+all.resids$model.id[all.resids$model.id == 'full'] <- "Full Model"
+#all.resids$line.size <- 0.5
+#all.resids$line.size[all.resids$model.id == "full"] <- 0.25
+pred.17.19 <- all.resids %>%  group_by(model,species,year,model.id,survey,type) %>% dplyr::summarise(mn = mean(resid), rmse = RMSE(fitted,response))
+pred.17.19$survey <- factor(pred.17.19$survey,levels = c("Winter","Spring","Fall"))
+#pred.17.19$field[pred.17.19$field ==3] <- "3 year field"
+#pred.17.19$field[pred.17.19$field ==5] <- "5 year field"
+cols <- addalpha(c("blue","black"),alpha=0.5) 
+
+
+plt.pred.17.19 <- ggplot(pred.17.19) + geom_line(aes(x=year,y = rmse,color = type,linetype = model.id)) + xlab("") + ylab("RMSE") + 
+                                       facet_wrap(~ species +survey, scales = 'free_x') + ylim(c(0,0.6)) + 
+                                       geom_hline(yintercept = mn.crap.rmse,linetype = 4,color = 'red') +
+                                       scale_linetype_manual(name="Guide1",values= c('solid', 'dashed'))+ 
+                                       scale_colour_manual(name="Guide1", values = cols) + theme_few() +theme(legend.title = element_blank()) 
+#+ scale_color_manual(values = cols)# +geom_vline(aes(xintercept = 2016.5))#
+
+save_plot(paste0(direct.proj,"Results/Figures/prediction_2017_2019.tiff"),plt.pred.17.19,base_width =12,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/prediction_2017_2019.png"),plt.pred.17.19,base_width =12,base_height =8,units='in')
+```
+
+
+```{r Gini-plot, echo=F, include=F, paged.print=FALSE,cache =T}
+theme_set(theme_few(base_size = 12))
+################################
+#### Gini Figures
+#################################
+
+gini.surveys$species[gini.surveys$species == "Yellowtail Flounder"] <- "Yellowtail"
+gini.surveys$species[gini.surveys$species == "Atlantic Cod"] <- "Cod"
+
+# Now the two figures, I don't think we need this first one for the paper, but is handy I think...
+plt.gini.cum.prop <- ggplot(gini.surveys) + geom_line(aes(x = cum.p.area, y = cum.pbm, color = year,group = year)) + facet_wrap(~species+survey) + 
+  geom_abline(slope=1,intercept =0) + xlim(c(0,1)) + ylim(c(0,1)) + 
+  ylab("Cumlative Proportion of Biomass") + xlab("Cumulative Area")  + scale_color_viridis_c(option = "A")+  theme_few(base_size = 12)
+
+save_plot(paste0(direct.proj,"Results/Figures/Gini_cum_prop_figures.tiff"),plt.gini.cum.prop,base_width =12,base_height =12,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/Gini_cum_prop_figures.png"),plt.gini.cum.prop,base_width =12,base_height =12,units='in')
+gini.cum.prop.plt <- paste0(direct.proj,"Results/Figures/Gini_cum_prop_figures.png")
+
+cols <- addalpha(c("forestgreen", "black"),alpha=0.5) 
+plt.gini.index <- ggplot(gini.surveys) + geom_line(aes(x = year, y = Gini,color=species))  + theme(legend.title = element_blank()) +
+  facet_wrap(~survey) + ylim(c(0,1)) + xlab("") + ylab("Gini Index") + scale_color_manual(values = cols) +  theme_few(base_size = 12)
+
+save_plot(paste0(direct.proj,"Results/Figures/Gini_index.tiff"),plt.gini.index,base_width =12,base_height =6,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/Gini_index.png"),plt.gini.index,base_width =12,base_height =6,units='in')
+```
+
+```{r cod-random-field-code,t, echo=F, include=F,cache=T}
+# Now make the 6 random fields we want and carry on...
+rf.winter.cod <- rand.fields.3.5$`cod_PA RV survey model.depth.sst_st_5`
+# The eras in here are wrong, need to make them match dat.winter
+rf.winter.cod$era <- rf.winter.cod$era+4
+rf.spring.cod <- rand.fields.3.5$`cod_PA nmfs-spring survey model.depth.sst_st_5`
+rf.fall.cod <- rand.fields.3.5$`cod_PA nmfs-fall survey model.depth.sst_st_5`
+
+
+eras <- unique(rf.winter.cod$era)
+n.eras <- length(eras)
+mesh.tmp <- st_sf(rep(st_sf(mesh.sf$vertices)$geometry,n.eras), crs = st_crs(mesh.grid))
+mesh.tmp$ID <- rf.winter.cod$ID <- seq(1:nrow(rf.winter.cod))
+rf.winter.cod <- merge(mesh.tmp,rf.winter.cod, by = "ID")
+
+#rf.winter.cod$era <- NA
+
+# This should work it's a bit of a ugly cheat, but is quick...
+# nrows <- nrow(mesh.sf$vertices)
+# for(i in 1:n.eras)
+# {
+#   count1 <- (i-1)*nrows+1
+#   count2 <- (i)*nrows
+#   rf.winter.cod$era[count1:count2] <- eras[i]
+# }
+
+# Set the color universally for all these figures
+col <- addalpha(pals::viridis(101),1)
+col.sd <- addalpha(pals::magma(101),1) # Different color for the standard deviation figures
+
+brk <- seq(-11,3,by=1)
+brk.sd <-  seq(0.4,2.6,by=0.2)
+
+if(length(brk) <= 6) hgt <- unit(2,'cm')
+if(length(brk.sd) <= 6) hgt.sd <- unit(2,'cm')
+if(length(brk) > 6 & length(brk) <= 12) hgt <- unit(3.75,'cm')
+if(length(brk.sd) > 6 & length(brk.sd) <= 12) hgt.sd <- unit(3.75,'cm')
+if(length(brk) > 12) hgt <- unit(5,'cm')
+if(length(brk.sd) > 12) hgt.sd <- unit(5,'cm')
+
+lims <- range(brk)
+lims.sd <- range(brk.sd)
+# Now all this I want to be specific for each plot I think.
+
+sf <- scale_fill_gradientn(colours = col, limits=lims,breaks=brk,name=paste0(en2fr("Random Field",french,case='sentence',custom = rosetta_terms)))
+sc <- scale_colour_gradientn(colours = col, limits=lims,breaks=brk,name=paste0(en2fr("Random Field",french,case='sentence',custom = rosetta_terms)))
+
+sf.sd <- scale_fill_gradientn(colours = col.sd, limits=lims.sd,breaks=brk.sd,name="SD  ")
+sc.sd <- scale_colour_gradientn(colours = col.sd, limits=lims.sd,breaks=brk.sd,name="SD  ")
+
+# So the cod winter plots will be...
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.winter %>% dplyr::filter(years_5 == n) %>%
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.winter %>% dplyr::filter(years_5 == n) %>% dplyr::summarise(max = max(year)),3,4))
+
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  rf.winter.cod$yrs[rf.winter.cod$era==n] <- yrs
+}
+
+# Now clip this to the appropriate area...
+rf.winter.cod <- st_intersection(rf.winter.cod,clp.pred)
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.rf.winter.cod <- bp + geom_sf(data = rf.winter.cod  ,aes(fill = r.field.link,colour=r.field.link))+
+facet_wrap(~yrs,ncol=6) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+#plt.rf.winter.cod
+
+plt.rf.winter.cod.sd <- bp + geom_sf(data = rf.winter.cod  ,aes(fill = r.field.sd,colour=r.field.sd))+
+facet_wrap(~yrs,ncol=6) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+#plt.rf.winter.cod.sd
+
+# Now do this for cod in the spring.
+
+eras <- unique(rf.spring.cod$era)
+n.eras <- length(eras)
+mesh.tmp <- st_sf(rep(st_sf(mesh.sf$vertices)$geometry,n.eras), crs = st_crs(mesh.grid))
+mesh.tmp$ID <- rf.spring.cod$ID <- seq(1:nrow(rf.spring.cod))
+rf.spring.cod <- merge(mesh.tmp,rf.spring.cod, by = "ID")
+
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.spring %>% dplyr::filter(years_5 == n) %>%
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.spring %>% dplyr::filter(years_5 == n) %>% dplyr::summarise(max = max(year)),3,4))
+
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  rf.spring.cod$yrs[rf.spring.cod$era==n] <- yrs
+}
+
+# Now clip this to the appropriate area...
+rf.spring.cod <- st_intersection(rf.spring.cod,clp.pred)
+
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.rf.spring.cod <- bp + geom_sf(data = rf.spring.cod  ,aes(fill = r.field.link,colour=r.field.link))+
+facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+#plt.rf.winter.cod
+
+plt.rf.spring.cod.sd <- bp + geom_sf(data = rf.spring.cod  ,aes(fill = r.field.sd,colour=r.field.sd))+
+facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+
+
+
+# Now do this for cod in the fall
+eras <- unique(rf.fall.cod$era)
+n.eras <- length(eras)
+mesh.tmp <- st_sf(rep(st_sf(mesh.sf$vertices)$geometry,n.eras), crs = st_crs(mesh.grid))
+mesh.tmp$ID <- rf.fall.cod$ID  <- seq(1:nrow(rf.fall.cod))
+rf.fall.cod <- merge(mesh.tmp,rf.fall.cod, by = "ID")
+
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.fall %>% dplyr::filter(years_5 == n) %>%
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.fall %>% dplyr::filter(years_5 == n) %>% dplyr::summarise(max = max(year)),3,4))
+
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  rf.fall.cod$yrs[rf.fall.cod$era==n] <- yrs
+}
+
+# Now clip this to the appropriate area...
+rf.fall.cod <- st_intersection(rf.fall.cod,clp.pred)
+
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.rf.fall.cod <- bp + geom_sf(data = rf.fall.cod  ,aes(fill = r.field.link,colour=r.field.link))+
+facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+#plt.rf.winter.cod
+
+plt.rf.fall.cod.sd <- bp + geom_sf(data = rf.fall.cod  ,aes(fill = r.field.sd,colour=r.field.sd))+
+  facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+
+
+# Now output the plots
+save_plot(paste0(direct.proj,"Results/Figures/rf_winter_cod.png"),plt.rf.winter.cod,base_width =12,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_winter_cod.tiff"),plt.rf.winter.cod,base_width =12,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_spring_cod.png"),plt.rf.spring.cod,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_spring_cod.tiff"),plt.rf.spring.cod,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_fall_cod.png"),plt.rf.fall.cod,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_fall_cod.tiff"),plt.rf.fall.cod,base_width =12,base_height =8,units='in',dpi=300)
+# SD plots
+save_plot(paste0(direct.proj,"Results/Figures/rf_winter_cod_sd.png"),plt.rf.winter.cod.sd,base_width =12,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_winter_cod_sd.tiff"),plt.rf.winter.cod.sd,base_width =12,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_spring_cod_sd.png"),plt.rf.spring.cod.sd,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_spring_cod_sd.tiff"),plt.rf.spring.cod.sd,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_fall_cod_sd.png"),plt.rf.fall.cod.sd,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_fall_cod_sd.tiff"),plt.rf.fall.cod.sd,base_width =12,base_height =8,units='in',dpi=300)
+
+
+```
+
+
+
+```{r yt-random-field-code,t, echo=F, include=F,cache=T}
+# get the approprite random fields
+rf.winter.yt <- rand.fields.3.5$`yt_PA RV survey model.depth.sed.sst_st_3`
+rf.winter.yt$era <- rf.winter.yt$era + 6 # The era in the random field needs updated to match years_3...
+rf.spring.yt <- rand.fields.3.5$`yt_PA nmfs-spring survey model.depth.sed.sst_st_3`
+rf.fall.yt <-   rand.fields.3.5$`yt_PA nmfs-fall survey model.depth.sed.sst_st_5`
+
+
+eras <- unique(rf.winter.yt$era)
+n.eras <- length(eras)
+mesh.tmp <- st_sf(rep(st_sf(mesh.sf$vertices)$geometry,n.eras), crs = st_crs(mesh.grid))
+mesh.tmp$ID <- rf.winter.yt$ID <- 1:nrow(rf.winter.yt)
+rf.winter.yt <- merge(mesh.tmp,rf.winter.yt, by = "ID")
+
+# Set the colors universally for all these figures
+col <- addalpha(pals::viridis(101),1)
+col.sd <- addalpha(pals::magma(101),1) # Different color for the standard deviation figures
+
+brk <- seq(-11,3,by=1)
+brk.sd <-  seq(0.4,2.6,by=0.2)
+
+if(length(brk) <= 6) hgt <- unit(2,'cm')
+if(length(brk.sd) <= 6) hgt.sd <- unit(2,'cm')
+if(length(brk) > 6 & length(brk) <= 12) hgt <- unit(3.75,'cm')
+if(length(brk.sd) > 6 & length(brk.sd) <= 12) hgt.sd <- unit(3.75,'cm')
+if(length(brk) > 12) hgt <- unit(5,'cm')
+if(length(brk.sd) > 12) hgt.sd <- unit(5,'cm')
+
+lims <- range(brk)
+lims.sd <- range(brk.sd)
+
+sf <- scale_fill_gradientn(colours = col, limits=lims,breaks=brk,name=paste0(en2fr("Random Field",french,case='sentence',custom = rosetta_terms)))
+sc <- scale_colour_gradientn(colours = col, limits=lims,breaks=brk,name=paste0(en2fr("Random Field",french,case='sentence',custom = rosetta_terms)))
+
+sf.sd <- scale_fill_gradientn(colours = col.sd, limits=lims.sd,breaks=brk.sd,name="SD  ")
+sc.sd <- scale_colour_gradientn(colours = col.sd, limits=lims.sd,breaks=brk.sd,name="SD  ")
+
+# Now all this I want to be specific for each plot I think.
+
+# So the yt winter plots will be...
+#eras <- unique(rf.winter.yt$era)
+#n.eras <- length(eras)
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.winter %>% dplyr::filter(years_3 == n) %>%
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.winter %>% dplyr::filter(years_3 == n) %>% dplyr::summarise(max = max(year)),3,4))
+
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  rf.winter.yt$yrs[rf.winter.yt$era==n] <- yrs
+}
+# Now clip this to the appropriate area...
+rf.winter.yt <- st_intersection(rf.winter.yt,clp.pred)
+
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.rf.winter.yt <- bp + geom_sf(data = rf.winter.yt  ,aes(fill = r.field.link,colour=r.field.link))+
+  facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+#plt.rf.winter.yt
+
+plt.rf.winter.yt.sd <- bp + geom_sf(data = rf.winter.yt  ,aes(fill = r.field.sd,colour=r.field.sd))+
+  facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map1 +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+#plt.rf.winter.yt.sd
+
+
+###### Now Spring Yellowtail
+
+# Now all this I want to be specific for each plot I think.
+
+
+eras <- unique(rf.spring.yt$era)
+n.eras <- length(eras)
+mesh.tmp <- st_sf(rep(st_sf(mesh.sf$vertices)$geometry,n.eras), crs = st_crs(mesh.grid))
+mesh.tmp$ID <- rf.spring.yt$ID <- 1:nrow(rf.spring.yt)
+rf.spring.yt <- merge(mesh.tmp,rf.spring.yt, by = "ID")
+
+# So the yt spring plots will be...
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.spring %>% dplyr::filter(years_3 == n) %>%
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.spring %>% dplyr::filter(years_3 == n) %>% dplyr::summarise(max = max(year)),3,4))
+
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  rf.spring.yt$yrs[rf.spring.yt$era==n] <- yrs
+}
+
+# Now clip this to the appropriate area...
+rf.spring.yt <- st_intersection(rf.spring.yt,clp.pred)
+
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.rf.spring.yt <- bp + geom_sf(data = rf.spring.yt  ,aes(fill = r.field.link,colour=r.field.link))+
+  facet_wrap(~yrs,ncol=8) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+#plt.rf.spring.yt
+
+plt.rf.spring.yt.sd <- bp + geom_sf(data = rf.spring.yt  ,aes(fill = r.field.sd,colour=r.field.sd))+
+  facet_wrap(~yrs,ncol=8) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+#plt.rf.spring.yt.sd
+
+###### Now Fall Yellowtail, note the 5 year random field is the best in show here...
+eras <- unique(rf.fall.yt$era)
+n.eras <- length(eras)
+mesh.tmp <- st_sf(rep(st_sf(mesh.sf$vertices)$geometry,n.eras), crs = st_crs(mesh.grid))
+mesh.tmp$ID <- rf.fall.yt$ID <- 1:nrow(rf.fall.yt)
+rf.fall.yt <- merge(mesh.tmp,rf.fall.yt, by = "ID")
+
+# So the yt fall plots will be...
+
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.fall %>% dplyr::filter(years_5 == n) %>%
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.fall %>% dplyr::filter(years_5 == n) %>% dplyr::summarise(max = max(year)),3,4))
+
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  rf.fall.yt$yrs[rf.fall.yt$era==n] <- yrs
+}
+
+# Now clip this to the appropriate area...
+rf.fall.yt <- st_intersection(rf.fall.yt,clp.pred)
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.rf.fall.yt <- bp + geom_sf(data = rf.fall.yt  ,aes(fill = r.field.link,colour=r.field.link))+
+  facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+#plt.rf.fall.yt
+
+plt.rf.fall.yt.sd <- bp + geom_sf(data = rf.fall.yt  ,aes(fill = r.field.sd,colour=r.field.sd))+
+  facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+#plt.rf.fall.yt.sd
+
+# Now output the plots
+save_plot(paste0(direct.proj,"Results/Figures/rf_winter_yt.png"),plt.rf.winter.yt,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_winter_yt.tiff"),plt.rf.winter.yt,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_spring_yt.png"),plt.rf.spring.yt,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_spring_yt.tiff"),plt.rf.spring.yt,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_fall_yt.png"),plt.rf.fall.yt,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_fall_yt.tiff"),plt.rf.fall.yt,base_width =12,base_height =9,units='in',dpi=300)
+
+## Now for the sd plots
+save_plot(paste0(direct.proj,"Results/Figures/rf_winter_yt_sd.png"),plt.rf.winter.yt.sd,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_winter_yt_sd.tiff"),plt.rf.winter.yt.sd,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_spring_yt_sd.png"),plt.rf.spring.yt.sd,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_spring_yt_sd.tiff"),plt.rf.spring.yt.sd,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_fall_yt_sd.png"),plt.rf.fall.yt.sd,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/rf_fall_yt_sd.tiff"),plt.rf.fall.yt.sd,base_width =12,base_height =9,units='in',dpi=300)
+
+```
+
+
+```{r cod-prediction-field-code,t, echo=F, include=F,cache=T}
+
+
+pf.winter.cod <- pred.output.pred$`cod_PA RV_survey`
+pf.spring.cod <- pred.output.pred$`cod_PA nmfs-spring_survey`
+pf.fall.cod <- pred.output.pred$`cod_PA nmfs-fall_survey`
+
+# Set the color universally for all these figures
+col <- addalpha(pals::viridis(101),1)
+col.sd <- addalpha(pals::magma(101),1) # Different color for the standard deviation figures
+
+brk <- seq(0,1,0.1)
+brk.sd <-  seq(0,0.3,0.05)
+
+
+if(length(brk) <= 6) hgt <- unit(2,'cm')
+if(length(brk.sd) <= 6) hgt.sd <- unit(2,'cm')
+if(length(brk) > 6 & length(brk) <= 12) hgt <- unit(3.75,'cm')
+if(length(brk.sd) > 6 & length(brk.sd) <= 12) hgt.sd <- unit(3.75,'cm')
+if(length(brk) > 12) hgt <- unit(5,'cm')
+if(length(brk.sd) > 12) hgt.sd <- unit(5,'cm')
+
+lims <- range(brk)
+lims.sd <- range(brk.sd)
+
+
+sf <- scale_fill_gradientn(colours = col, limits=lims,breaks=brk,name=en2fr("Occurrence Probability",french,case = "sentence"))
+sc <- scale_colour_gradientn(colours = col, limits=lims,breaks=brk,name=en2fr("Occurrence Probability",french,case = "sentence"))
+
+sf.sd <- scale_fill_gradientn(colours = col.sd, limits=lims.sd,breaks=brk.sd,name="SD  ")
+sc.sd <- scale_colour_gradientn(colours = col.sd, limits=lims.sd,breaks=brk.sd,name="SD  ")
+
+# Now all this I want to be specific for each plot I think.
+
+# So the cod winter plots will be...
+eras <- factor.2.number(unique(pf.winter.cod$years_5))
+n.eras <- length(eras)
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.winter %>% dplyr::filter(years_5 == n) %>% 
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.winter %>% dplyr::filter(years_5 == n) %>% dplyr::summarise(max = max(year)),3,4))
+  
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  pf.winter.cod$yrs[pf.winter.cod$years_5==n] <- yrs
+}
+
+# Now clip this to the appropriate area...
+pf.winter.cod <- st_as_sf(pf.winter.cod,coords = c("X","Y"),crs = st_crs(mesh.grid))
+pf.winter.cod <- st_join(mesh.grid,pf.winter.cod)
+pf.winter.cod <- pf.winter.cod %>% dplyr::filter(!is.na(years_5))
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.pf.winter.cod <- bp + geom_sf(data = pf.winter.cod  ,aes(fill = pred,colour=pred))+
+facet_wrap(~yrs,ncol=6) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+#plt.rf.winter.cod
+plt.pf.winter.cod.sd <- bp + geom_sf(data = pf.winter.cod  ,aes(fill = pred.sd,colour=pred.sd))+
+  facet_wrap(~yrs,ncol=6) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map1 +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+
+# NMFS Spring
+
+eras <- factor.2.number(unique(pf.spring.cod$years_5))
+n.eras <- length(eras)
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.spring %>% dplyr::filter(years_5 == n) %>% 
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.spring %>% dplyr::filter(years_5 == n) %>% dplyr::summarise(max = max(year)),3,4))
+  
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  pf.spring.cod$yrs[pf.spring.cod$years_5==n] <- yrs
+}
+
+# Now clip this to the appropriate area...
+pf.spring.cod <- st_as_sf(pf.spring.cod,coords = c("X","Y"),crs = st_crs(mesh.grid))
+pf.spring.cod <- st_join(mesh.grid,pf.spring.cod)
+pf.spring.cod <- pf.spring.cod %>% dplyr::filter(!is.na(years_5))
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.pf.spring.cod <- bp + geom_sf(data = pf.spring.cod  ,aes(fill = pred,colour=pred))+
+facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+#plt.rf.spring.cod
+plt.pf.spring.cod.sd <- bp + geom_sf(data = pf.spring.cod  ,aes(fill = pred.sd,colour=pred.sd))+
+  facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map1 +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+
+
+
+# NMFS Fall
+
+eras <- factor.2.number(unique(pf.fall.cod$years_5))
+n.eras <- length(eras)
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.fall %>% dplyr::filter(years_5 == n) %>% 
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.fall %>% dplyr::filter(years_5 == n) %>% dplyr::summarise(max = max(year)),3,4))
+  
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  pf.fall.cod$yrs[pf.fall.cod$years_5==n] <- yrs
+}
+
+# Now clip this to the appropriate area...
+pf.fall.cod <- st_as_sf(pf.fall.cod,coords = c("X","Y"),crs = st_crs(mesh.grid))
+pf.fall.cod <- st_join(mesh.grid,pf.fall.cod)
+pf.fall.cod <- pf.fall.cod %>% dplyr::filter(!is.na(years_5))
+
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.pf.fall.cod <- bp + geom_sf(data = pf.fall.cod  ,aes(fill = pred,colour=pred))+
+facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+#plt.rf.fall.cod
+plt.pf.fall.cod.sd <- bp + geom_sf(data = pf.fall.cod  ,aes(fill = pred.sd,colour=pred.sd))+
+  facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map1 +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+
+# Output these plots
+save_plot(paste0(direct.proj,"Results/Figures/pf_winter_cod.png"),plt.pf.winter.cod,base_width =12,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_winter_cod.tiff"),plt.pf.winter.cod,base_width =12,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_spring_cod.png"),plt.pf.spring.cod,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_spring_cod.tiff"),plt.pf.spring.cod,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_fall_cod.png"),plt.pf.fall.cod,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_fall_cod.tiff"),plt.pf.fall.cod,base_width =12,base_height =8,units='in',dpi=300)
+# Now the SD plots
+save_plot(paste0(direct.proj,"Results/Figures/pf_winter_cod_sd.png"),plt.pf.winter.cod.sd,base_width =12,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_winter_cod_sd.tiff"),plt.pf.winter.cod.sd,base_width =12,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_spring_cod_sd.png"),plt.pf.spring.cod.sd,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_spring_cod_sd.tiff"),plt.pf.spring.cod.sd,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_fall_cod_sd.png"),plt.pf.fall.cod.sd,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_fall_cod_sd.tiff"),plt.pf.fall.cod.sd,base_width =12,base_height =8,units='in',dpi=300)
+
+
+
+```
+
+
+```{r yt-prediction-field-code,t, echo=F, include=F, cache=T}
+pf.winter.yt <- pred.output.pred$`yt_PA RV_survey`
+pf.spring.yt <- pred.output.pred$`yt_PA nmfs-spring_survey`
+pf.fall.yt <- pred.output.pred$`yt_PA nmfs-fall_survey`
+
+
+# Set the color universally for all these figures
+col <- addalpha(pals::viridis(101),1)
+col.sd <- addalpha(pals::magma(101),1) # Different color for the standard deviation figures
+brk <- seq(0,1,0.1)
+brk.sd <-  seq(0,0.3,0.05)
+
+
+if(length(brk) <= 6) hgt <- unit(2,'cm')
+if(length(brk.sd) <= 6) hgt.sd <- unit(2,'cm')
+if(length(brk) > 6 & length(brk) <= 12) hgt <- unit(3.75,'cm')
+if(length(brk.sd) > 6 & length(brk.sd) <= 12) hgt.sd <- unit(3.75,'cm')
+if(length(brk) > 12) hgt <- unit(5,'cm')
+if(length(brk.sd) > 12) hgt.sd <- unit(5,'cm')
+
+lims <- range(brk)
+lims.sd <- range(brk.sd)
+# Now all this I want to be specific for each plot I think.
+
+# So the yt winter plots will be...
+eras <- factor.2.number(unique(pf.winter.yt$years_3))
+n.eras <- length(eras)
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.winter %>% dplyr::filter(years_3 == n) %>% 
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.winter %>% dplyr::filter(years_3 == n) %>% dplyr::summarise(max = max(year)),3,4))
+  
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  pf.winter.yt$yrs[pf.winter.yt$years_3==n] <- yrs
+}
+
+# Now clip this to the appropriate area...
+pf.winter.yt <- st_as_sf(pf.winter.yt,coords = c("X","Y"),crs = st_crs(mesh.grid))
+pf.winter.yt <- st_join(mesh.grid,pf.winter.yt)
+pf.winter.yt <- pf.winter.yt %>% dplyr::filter(!is.na(years_3))
+
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.pf.winter.yt <- bp + geom_sf(data = pf.winter.yt  ,aes(fill = pred,colour=pred))+
+facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+#plt.rf.winter.yt
+plt.pf.winter.yt.sd <- bp + geom_sf(data = pf.winter.yt  ,aes(fill = pred.sd,colour=pred.sd))+
+  facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map1 +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+
+# NMFS Spring
+
+eras <- factor.2.number(unique(pf.spring.yt$years_3))
+n.eras <- length(eras)
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.spring %>% dplyr::filter(years_3 == n) %>% 
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.spring %>% dplyr::filter(years_3 == n) %>% dplyr::summarise(max = max(year)),3,4))
+  
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  pf.spring.yt$yrs[pf.spring.yt$years_3==n] <- yrs
+}
+
+# Now clip this to the appropriate area...
+# Now clip this to the appropriate area...
+pf.spring.yt <- st_as_sf(pf.spring.yt,coords = c("X","Y"),crs = st_crs(mesh.grid))
+pf.spring.yt <- st_join(mesh.grid,pf.spring.yt)
+pf.spring.yt <- pf.spring.yt %>% dplyr::filter(!is.na(years_3))
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.pf.spring.yt <- bp + geom_sf(data = pf.spring.yt  ,aes(fill = pred,colour=pred))+
+facet_wrap(~yrs,ncol=8) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+#plt.rf.spring.yt
+plt.pf.spring.yt.sd <- bp + geom_sf(data = pf.spring.yt  ,aes(fill = pred.sd,colour=pred.sd))+
+  facet_wrap(~yrs,ncol=8) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map1 +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+
+
+
+# NMFS Fall
+
+eras <- factor.2.number(unique(pf.fall.yt$years_5))
+n.eras <- length(eras)
+for(n in min(eras):max(eras))
+{
+  yrs <- paste0(substr(dat.fall %>% dplyr::filter(years_5 == n) %>% 
+                                                   dplyr::summarise(min = min(year)),3,4),"-",
+                                          substr(dat.fall %>% dplyr::filter(years_5 == n) %>% dplyr::summarise(max = max(year)),3,4))
+  
+  if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+  pf.fall.yt$yrs[pf.fall.yt$years_5==n] <- yrs
+}
+
+# Now clip this to the appropriate area...
+pf.fall.yt <- st_as_sf(pf.fall.yt,coords = c("X","Y"),crs = st_crs(mesh.grid))
+pf.fall.yt <- st_join(mesh.grid,pf.fall.yt)
+pf.fall.yt <- pf.fall.yt %>% dplyr::filter(!is.na(years_5))
+
+
+# Facet version of the above NOTE HOW THE YEARS ARE F'd up now...
+plt.pf.fall.yt <- bp + geom_sf(data = pf.fall.yt  ,aes(fill = pred,colour=pred))+
+facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+#plt.rf.fall.yt
+plt.pf.fall.yt.sd <- bp + geom_sf(data = pf.fall.yt  ,aes(fill = pred.sd,colour=pred.sd))+
+  facet_wrap(~yrs,ncol=5) +
+  coord_sf(datum=32619) + sf.sd + sc.sd  +# theme_map1 +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top") 
+
+# Output these plots
+save_plot(paste0(direct.proj,"Results/Figures/pf_winter_yt.png"),plt.pf.winter.yt,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_winter_yt.tiff"),plt.pf.winter.yt,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_spring_yt.png"),plt.pf.spring.yt,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_spring_yt.tiff"),plt.pf.spring.yt,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_fall_yt.png"),plt.pf.fall.yt,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_fall_yt.tiff"),plt.pf.fall.yt,base_width =12,base_height =9,units='in',dpi=300)
+
+## Now for the sd plots
+save_plot(paste0(direct.proj,"Results/Figures/pf_winter_yt_sd.png"),plt.pf.winter.yt.sd,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_winter_yt_sd.tiff"),plt.pf.winter.yt.sd,base_width =12,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_spring_yt_sd.png"),plt.pf.spring.yt.sd,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_spring_yt_sd.tiff"),plt.pf.spring.yt.sd,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_fall_yt_sd.png"),plt.pf.fall.yt.sd,base_width =12,base_height =9,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pf_fall_yt_sd.tiff"),plt.pf.fall.yt.sd,base_width =12,base_height =9,units='in',dpi=300)
+
+
+```
+
+```{r hyperparameters, echo=F, include=F, paged.print=FALSE,cache=T}
+theme_set(theme_few(base_size = 12))
+# Plotting the variance.
+plt.dep.var.est <- ggplot(hyper.mod.est %>% dplyr::filter(hyper == "Precision for depth")) + 
+                         geom_point(aes(x = survey ,y=sqrt(1/mean))) + 
+                         facet_wrap(~species) +
+                         geom_errorbar(aes(x = survey,ymin=sqrt(1/`0.025quant`),ymax = sqrt(1/`0.975quant`)),width=0) +
+                         xlab("") + ylab("\u03C3² (Dep)")
+
+plt.sst.var.est <- ggplot(hyper.mod.est %>% dplyr::filter(hyper == "Precision for sst")) + 
+                          geom_point(aes(x = survey ,y=sqrt(1/mean))) + 
+                          facet_wrap(~species) +
+                          geom_errorbar(aes(x = survey,ymin=sqrt(1/`0.025quant`),ymax = sqrt(1/`0.975quant`)),width=0) +
+                          xlab("") + ylab("\u03C3² (SST)")
+
+plt.range.field.est <- ggplot(hyper.mod.est %>% dplyr::filter(hyper == "Range for w")) + 
+                          geom_point(aes(x = survey ,y=mean/1000)) + 
+                          facet_wrap(~species) +
+                          geom_errorbar(aes(x = survey,ymin=`0.025quant`/1000,ymax = `0.975quant`/1000),width=0) +
+                          xlab("") + ylab("Range of Field (km)")
+
+plt.sd.field.est <- ggplot(hyper.mod.est %>% dplyr::filter(hyper == "Stdev for w")) + 
+                          geom_point(aes(x = survey ,y=mean)) + 
+                          facet_wrap(~species) +
+                          geom_errorbar(aes(x = survey,ymin=`0.025quant`,ymax = `0.975quant`),width=0) +
+                          xlab("") + ylab("\u03C3 of Field")
+# Now for the marginals
+plt.yt.winter.marginal <- ggplot(hyper.mod.post %>% dplyr::filter(model == 'yt.winter')) + 
+                                geom_line(aes(x = x ,y=y)) +
+                                facet_wrap(~hyper,scale='free') + 
+                                xlab("") + ylab("") +  
+                                theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
+
+plt.yt.spring.marginal <- ggplot(hyper.mod.post %>% dplyr::filter(model == 'yt.spring')) + 
+                                geom_line(aes(x = x ,y=y)) +
+                                facet_wrap(~hyper,scale='free') + 
+                                xlab("") + ylab("") +  
+                                theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
+
+plt.yt.fall.marginal <- ggplot(hyper.mod.post %>% dplyr::filter(model == 'yt.fall')) + 
+                                geom_line(aes(x = x ,y=y)) +
+                                facet_wrap(~hyper,scale='free') + 
+                                xlab("") + ylab("") +  
+                                theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
+
+plt.cod.winter.marginal <- ggplot(hyper.mod.post %>% dplyr::filter(model == 'cod.winter')) + 
+                                geom_line(aes(x = x ,y=y)) +
+                                facet_wrap(~hyper,scale='free') + 
+                                xlab("") + ylab("") +  
+                                theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
+
+plt.cod.spring.marginal <- ggplot(hyper.mod.post %>% dplyr::filter(model == 'cod.spring')) + 
+                                geom_line(aes(x = x ,y=y)) +
+                                facet_wrap(~hyper,scale='free') + 
+                                xlab("") + ylab("") +  
+                                theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
+
+plt.cod.fall.marginal <- ggplot(hyper.mod.post %>% dplyr::filter(model == 'cod.fall')) + 
+                                geom_line(aes(x = x ,y=y)) +
+                                facet_wrap(~hyper,scale='free') + 
+                                xlab("") + ylab("") +  
+                                theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
+
+# Now save all these bad boys...
+
+# The estimates for the hyperparameters
+save_plot(paste0(direct.proj,"Results/Figures/hyper_dep_var_est.png"),plt.dep.var.est,base_width =6,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/hyper_dep_var_est.tiff"),plt.dep.var.est,base_width =6,base_height =4,units='in',dpi=300)
+
+
+save_plot(paste0(direct.proj,"Results/Figures/hyper_sst_var_est.png"),plt.sst.var.est,base_width =6,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/hyper_sst_var_est.tiff"),plt.sst.var.est,base_width =6,base_height =4,units='in',dpi=300)
+
+
+save_plot(paste0(direct.proj,"Results/Figures/hyper_range_field_est.png"),plt.range.field.est,base_width =6,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/hyper_range_field_est.tiff"),plt.range.field.est,base_width =6,base_height =4,units='in',dpi=300)
+
+save_plot(paste0(direct.proj,"Results/Figures/hyper_sd_field_est.png"),plt.sd.field.est,base_width =6,base_height =4,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/hyper_sd_field_est.tiff"),plt.sd.field.est,base_width =6,base_height =4,units='in',dpi=300)
+
+
+# The cod marginals/posteriors
+save_plot(paste0(direct.proj,"Results/Figures/cod_winter_marginal.png"),plt.cod.winter.marginal,base_width =6,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/cod_winter_marginal.tiff"),plt.cod.winter.marginal,base_width =6,base_height =8,units='in',dpi=300)
+
+save_plot(paste0(direct.proj,"Results/Figures/cod_spring_marginal.png"),plt.cod.spring.marginal,base_width =6,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/cod_spring_marginal.tiff"),plt.cod.spring.marginal,base_width =6,base_height =8,units='in',dpi=300)
+
+save_plot(paste0(direct.proj,"Results/Figures/cod_fall_marginal.png"),plt.cod.fall.marginal,base_width =6,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/cod_fall_marginal.tiff"),plt.cod.fall.marginal,base_width =6,base_height =8,units='in',dpi=300)
+
+# The yt marginals/posteriors
+save_plot(paste0(direct.proj,"Results/Figures/yt_winter_marginal.png"),plt.yt.winter.marginal,base_width =6,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/yt_winter_marginal.tiff"),plt.yt.winter.marginal,base_width =6,base_height =8,units='in',dpi=300)
+
+save_plot(paste0(direct.proj,"Results/Figures/yt_spring_marginal.png"),plt.yt.spring.marginal,base_width =6,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/yt_spring_marginal.tiff"),plt.yt.spring.marginal,base_width =6,base_height =8,units='in',dpi=300)
+
+save_plot(paste0(direct.proj,"Results/Figures/yt_fall_marginal.png"),plt.yt.fall.marginal,base_width =6,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/yt_fall_marginal.tiff"),plt.yt.fall.marginal,base_width =6,base_height =8,units='in',dpi=300)
+
+
+```
+
+```{r PCA-plt, echo=F, include=F, paged.print=FALSE,cache=T}
+
+
+pca.12.winter <- ggbiplot(RV.pca.mod,alpha=0.05,varname.size = 4) + 
+                                    scale_y_continuous(limits=c(-3,3))+  scale_x_continuous(limits=c(-3,3)) +
+                                    ggtitle("WInter PC 1 and 2") + theme(plot.title = element_text(hjust = 0.5))
+pca.34.winter <- ggbiplot(RV.pca.mod,alpha=0.05,choices=c(3,4),varname.size = 4) + 
+                                    scale_y_continuous(limits=c(-3,3)) +  scale_x_continuous(limits=c(-3,3))+
+                                    ggtitle("Winter PC 3 and 4") + theme(plot.title = element_text(hjust = 0.5))
+
+pca.12.spring <- ggbiplot(nmfs.spr.pca.mod,alpha=0.05,varname.size = 4) +  
+                                    scale_y_continuous(limits=c(-3,3))+  scale_x_continuous(limits=c(-3,3)) +
+                                    ggtitle("Spring PC 1 and 2") + theme(plot.title = element_text(hjust = 0.5))
+
+pca.34.spring <- ggbiplot(nmfs.spr.pca.mod,alpha=0.05,choices=c(3,4),varname.size = 4) + 
+                                    scale_y_continuous(limits=c(-3,3))+  scale_x_continuous(limits=c(-3,3)) +
+                                    ggtitle("Spring PC 3 and 4") + theme(plot.title = element_text(hjust = 0.5))
+
+pca.12.fall <- ggbiplot(nmfs.fall.pca.mod,alpha=0.05,varname.size = 4) + 
+                                    scale_y_continuous(limits=c(-3,3))+  scale_x_continuous(limits=c(-3,3)) +                                  
+                                    ggtitle("Fall PC 1 and 2") + theme(plot.title = element_text(hjust = 0.5))
+
+pca.34.fall <- ggbiplot(nmfs.fall.pca.mod,alpha=0.05,choices=c(3,4),varname.size = 4)  + 
+                                    scale_y_continuous(limits=c(-3,3))+  scale_x_continuous(limits=c(-3,3)) +                                  
+                                    ggtitle("Fall PC 3 and 4") + theme(plot.title = element_text(hjust = 0.5))
+
+plt.pca <- plot_grid(pca.12.winter,pca.12.spring,pca.12.fall,pca.34.winter,pca.34.spring,pca.34.fall,nrow =2)
+
+save_plot(paste0(direct.proj,"Results/Figures/pca.png"),plt.pca,base_width =11,base_height =7,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/pca.tiff"),plt.pca,base_width =11,base_height =7,units='in',dpi=300)
+
+```
+
+```{r mesh-grid-plt, echo=F, include=F, paged.print=FALSE,cache=T}
+####
+# Figure for the mesh grid
+#####
+plt.mesh.grid <- pecjector(area = list(x=c(540000,780000), y = c(4500000,4680000),crs = 32619),buffer=0.4, c_sys = 32619,plot=F,
+                     add_layer = list(land ='grey',eez = 'eez',nafo = 'main',scale.bar = 'tl',bathy = c(50,'s')),
+                     add_custom = list(obj = mesh.grid, size=0.5,color= 'grey30')) +
+                     theme_map()
+save_plot(paste0(direct.proj,"Results/Figures/mesh_grid.tiff"),plt.mesh.grid,base_width =8,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/mesh.grid.png"),plt.mesh.grid,base_width =8,base_height =8,units='in')
+
+```
+
+```{r ,figs-load, echo=F, include=F, paged.print=FALSE,cache =T}
+# Here we load the figures we need for later, saves lots of running above if nothing has changed...
+over.plt <- paste0(direct.proj,"Results/Figures/GB_overview.png") # Overview plot
+mesh.plt <- paste0(direct.proj,"Results/Figures/mesh.png") # Mesh plot
+sst_depth_spatial.plt <- paste0(direct.proj,"Results/Figures/depth_sst_sed_fields.png") # Depth-SST-Sed plot
+diag.waic.single.fe.plt <- paste0(direct.proj,"Results/Figures/Diagnostics_single_fe_waic.png") # 1st stage diagnostic plot
+diag.waic.2.covars.fe.plt <- paste0(direct.proj,"Results/Figures/Diagnostics_2_covars_fe_waic.png") # 2nd stage diagnostic plot
+diag.waic.3.covars.fe.plt <- paste0(direct.proj,"Results/Figures/Diagnostics_3_covars_fe_waic.png") # 3rd stage diagnotic plot
+diag.waic.rf.plt <- paste0(direct.proj,"Results/Figures/Diagnostics_rf_waic.png") # random field diagnostic plot
+cod.fe.plt <- paste0(direct.proj,"Results/Figures/Cod_fixed_effects.png") # Cod environmental covariate plot
+yt.fe.plt <- paste0(direct.proj,"Results/Figures/yt_fixed_effects.png")# Yt environmental covariate plot
+cog.plt <- paste0(direct.proj,"Results/Figures/center_of_gravity.png") # COG plot
+area.plt <- paste0(direct.proj,"Results/Figures/Area_ts_high.png") # Area time series plot
+area.can.vs.us.plt <- paste0(direct.proj,"Results/Figures/Area_can_vs_us_ts_high.png") # Canada vs US area time series plot
+folds.plt <- paste0(direct.proj,"Results/Figures/cross_fold_validation.png") # Cross fold validation plot
+pred.17.19.plt <- paste0(direct.proj,"Results/Figures/prediction_2017_2019.png") # Predition and residula plot
+gini.index.plt <- paste0(direct.proj,"Results/Figures/Gini_index.png") # Gini index plot
+pca.plt <- paste0(direct.proj,"Results/Figures/pca.png") # PCA plot
+mesh.grid.plt <- paste0(direct.proj,"Results/Figures/mesh.grid.png")
+
+# Mean rf plots.
+rf.winter.cod.plt <- paste0(direct.proj,"Results/Figures/rf_winter_cod.png")
+rf.spring.cod.plt <- paste0(direct.proj,"Results/Figures/rf_spring_cod.png")
+rf.fall.cod.plt <- paste0(direct.proj,"Results/Figures/rf_fall_cod.png")
+rf.winter.yt.plt <- paste0(direct.proj,"Results/Figures/rf_winter_yt.png")
+rf.spring.yt.plt <- paste0(direct.proj,"Results/Figures/rf_spring_yt.png")
+rf.fall.yt.plt <- paste0(direct.proj,"Results/Figures/rf_fall_yt.png")
+# SD rf plots
+rf.winter.cod.sd.plt <- paste0(direct.proj,"Results/Figures/rf_winter_cod_sd.png")
+rf.spring.cod.sd.plt <- paste0(direct.proj,"Results/Figures/rf_spring_cod_sd.png")
+rf.fall.cod.sd.plt <- paste0(direct.proj,"Results/Figures/rf_fall_cod_sd.png")
+rf.winter.yt.sd.plt <- paste0(direct.proj,"Results/Figures/rf_winter_yt_sd.png")
+rf.spring.yt.sd.plt <- paste0(direct.proj,"Results/Figures/rf_spring_yt_sd.png")
+rf.fall.yt.sd.plt <- paste0(direct.proj,"Results/Figures/rf_fall_yt_sd.png")
+# Mean PF plots
+pf.winter.cod.plt <- paste0(direct.proj,"Results/Figures/pf_winter_cod.png")
+pf.spring.cod.plt <- paste0(direct.proj,"Results/Figures/pf_spring_cod.png")
+pf.fall.cod.plt <- paste0(direct.proj,"Results/Figures/pf_fall_cod.png")
+pf.winter.yt.plt <- paste0(direct.proj,"Results/Figures/pf_winter_yt.png")
+pf.spring.yt.plt <- paste0(direct.proj,"Results/Figures/pf_spring_yt.png")
+pf.fall.yt.plt <- paste0(direct.proj,"Results/Figures/pf_fall_yt.png")
+# SD PF plots
+pf.winter.cod.sd.plt <- paste0(direct.proj,"Results/Figures/pf_winter_cod_sd.png")
+pf.spring.cod.sd.plt <- paste0(direct.proj,"Results/Figures/pf_spring_cod_sd.png")
+pf.fall.cod.sd.plt <- paste0(direct.proj,"Results/Figures/pf_fall_cod_sd.png")
+pf.winter.yt.sd.plt <- paste0(direct.proj,"Results/Figures/pf_winter_yt_sd.png")
+pf.spring.yt.sd.plt <- paste0(direct.proj,"Results/Figures/pf_spring_yt_sd.png")
+pf.fall.yt.sd.plt <- paste0(direct.proj,"Results/Figures/pf_fall_yt_sd.png")
+#Hyperparameters
+dep.var.est.plt <- paste0(direct.proj,"Results/Figures/hyper_dep_var_est.png")
+sst.var.est.plt <- paste0(direct.proj,"Results/Figures/hyper_sst_var_est.png")
+range.field.est.plt <- paste0(direct.proj,"Results/Figures/hyper_range_field_est.png")
+sd.field.est.plt <- paste0(direct.proj,"Results/Figures/hyper_sd_field_est.png")
+cod.fall.marginal.plt <- paste0(direct.proj,"Results/Figures/cod_fall_marginal.png")
+cod.winter.marginal.plt <- paste0(direct.proj,"Results/Figures/cod_winter_marginal.png")
+cod.spring.marginal.plt <- paste0(direct.proj,"Results/Figures/cod_spring_marginal.png")
+yt.winter.marginal.plt <- paste0(direct.proj,"Results/Figures/yt_winter_marginal.png")
+yt.spring.marginal.plt <- paste0(direct.proj,"Results/Figures/yt_spring_marginal.png")
+yt.fall.marginal.plt <- paste0(direct.proj,"Results/Figures/yt_fall_marginal.png")
+
+```
+
+```{r inline-data-for-paper, echo=F, include=F, paged.print=FALSE,cache =F}
+
+################################
+###  Getting data for use in the paper  ###
+################################
+n.stations <- dat.final %>% group_by(survey) %>% dplyr::summarise(ns = n())
+n.nmfs.spring <- n.stations$ns[n.stations$survey == 'nmfs-spring']
+n.rv <- n.stations$ns[n.stations$survey == 'RV']
+n.nmfs.fall <- n.stations$ns[n.stations$survey == 'nmfs-fall']
+
+# What size are the mesh grid cells
+mesh.grid.size <- st_area(mesh.grid) %>% set_units("km^2") %>% as.numeric() %>% mean() %>% round(digits=1)
+
+# Sediment type overall...
+sed.bd <- table(dat.final$SEDNUM)
+per.3.4.sed <- signif(100*sum(sed.bd[2:3])/length(dat.final$SEDNUM), digits = 2)
+# Other sediment types are 5.7% of tows, along with a small number of NA tows (which table doesn't show).
+per.other.sed <- signif(100*sum(sed.bd[-c(2:3)])/length(dat.final$SEDNUM), digits = 2)
+# Get some of the cod FE numbers... hard to pick a number here give variabilty but save to say looking at these the drop occurs between 10 and 11 °C
+wt.cod <- cod.fe.res %>% dplyr::filter(survey == "Winter" & fe == "SST") 
+st.cod <- cod.fe.res %>% dplyr::filter(survey == "Spring" & fe == "SST") 
+ft.cod <- cod.fe.res %>% dplyr::filter(survey == "Fall" & fe == "SST") 
+
+peaks <- aggregate(response ~ survey + fe,data = cod.fe.res, FUN = function(x) which(x == max(x)))
+wd.cod <- cod.fe.res %>% dplyr::filter(survey == "Winter" & fe == "Depth") 
+sd.cod <- cod.fe.res %>% dplyr::filter(survey == "Spring" & fe == "Depth") 
+s.dep.peak <- sd.cod$covar[peaks$response[2]]
+w.dep.peak <- wd.cod$covar[peaks$response[1]]
+c.dep.peak <- paste0(round(s.dep.peak,digits =0),"-",round(w.dep.peak,digits=0))
+
+# For yellowtail pick a peak depth as well
+peaks <- aggregate(response ~ survey + fe,data = yt.fe.res, FUN = function(x) which(x == max(x)))
+wd.yt <- yt.fe.res %>% dplyr::filter(survey == "Winter" & fe == "Depth") 
+sd.yt <- yt.fe.res %>% dplyr::filter(survey == "Spring" & fe == "Depth") 
+fd.yt <- yt.fe.res %>% dplyr::filter(survey == "Fall" & fe == "Depth") 
+s.dep.peak <- as.numeric(sd.yt$covar[peaks$response[2]])
+w.dep.peak <- as.numeric(wd.yt$covar[peaks$response[1]])
+f.dep.peak <- as.numeric(fd.yt$covar[peaks$response[3]])
+# Spring and winter are the deepest so take those..
+yt.dep.peak <- paste0(round(s.dep.peak,digits =0),"-",round(w.dep.peak,digits=0))
+
+# Hyperparamters
+range.winter.cod.est <- hyper.mod.est %>% dplyr::filter(model == "cod.winter" , hyper == "Range for w")
+range.winter.cod.mn <- signif(range.winter.cod.est$mean/1000,digits =3)
+range.winter.cod.lci <- signif(range.winter.cod.est$`0.025quant`/1000,digits =2)
+range.winter.cod.uci <- signif(range.winter.cod.est$`0.975quant`/1000,digits =3)
+range.winter.cod.mn.ci <- paste0(range.winter.cod.mn," (95% CI:",range.winter.cod.lci,"-",range.winter.cod.uci,")")
+
+range.spring.cod.est <- hyper.mod.est %>% dplyr::filter(model == "cod.spring" , hyper == "Range for w")
+range.spring.cod.mn <- signif(range.spring.cod.est$mean/1000,digits =3)
+range.spring.cod.lci <- signif(range.spring.cod.est$`0.025quant`/1000,digits =3)
+range.spring.cod.uci <- signif(range.spring.cod.est$`0.975quant`/1000,digits =3)
+range.spring.cod.mn.ci <- paste0(range.spring.cod.mn," (95% CI:",range.spring.cod.lci,"-",range.spring.cod.uci,")")
+
+range.winter.yt.est <- hyper.mod.est %>% dplyr::filter(model == "yt.winter" , hyper == "Range for w")
+range.winter.yt.mn <- signif(range.winter.yt.est$mean/1000,digits =2)
+range.winter.yt.lci <- signif(range.winter.yt.est$`0.025quant`/1000,digits =2)
+range.winter.yt.uci <- signif(range.winter.yt.est$`0.975quant`/1000,digits =3)
+range.winter.yt.mn.ci <- paste0(range.winter.yt.mn," (95% CI:",range.winter.yt.lci,"-",range.winter.yt.uci,")")
+
+```

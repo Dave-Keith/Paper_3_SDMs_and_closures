@@ -1,0 +1,73 @@
+# Methods {#ref-methods}
+
+
+## Study area
+
+Georges Bank, located in the northwest Atlantic straddling the U.S.-Canada maritime border, is a 3-150 m deep plateau that covers approximately 42,000 km^2^ and is characterized by high primary productivity, and historically high fish abundance [@townsendNitrogenLimitationSecondary1997]. It is an eroding bank with no sediment recharge and covered with coarse gravel and sand that provides habitat for many species [@valentineSeaFloorEnvironment1991]. Since the establishment of the ICJ decision in 1984, the Canadian and U.S. portions of GB have been largely managed separately by the two countries, though some collaborative management exists (Figure \@ref(fig:Overview)).
+
+## Data
+
+Survey data were obtained from the Fisheries and Oceans Canada (DFO) "*Winter*" Research Vessel (RV) survey from 1987-2019 and the National Marine Fisheries Service (NMFS) "*Spring*" and "*Fall*" groundfish surveys from 1972-2019. The *Winter* survey on GB typically occurs in February and early March, the *Spring* survey typically occurs in April and May, while the  *Fall* survey generally takes place between September and November. For all surveys only tows deemed *successful* (Class 1 data) were used in this analysis. This resulted in `r n.rv` tows from the *Winter* survey, `r n.nmfs.spring` tows from the *Spring* survey, and `r n.nmfs.fall` tows from the  *Fall* survey.
+
+## Environmental covariates
+
+A suite of 22 spatial environmental and oceanographic datasets were evaluated (Table \@ref(tab:table-1)). To eliminate redundant variables, Variance Inflation Factors (VIFs) were calculated for all variables and any variables with VIF scores \> 3 were removed. This procedure was repeated until no variables remained with a VIF score \> 3 [@zuurProtocolDataExploration2010]. A Principal Component Analysis (PCA) was undertaken using the data from the associated station locations for each survey with variables excluded from the PCA if they showed no evidence for correlation with other variables or if they had very non-linear correlation patterns (Table \@ref(tab:table-1)). The top 4 PCA components, accounting for at least 80% of the variability in the data for a given survey, were retained and included as covariates for the models in addition to the retained environmental covariates (See Supplemental Figure \@ref(fig:PCA)).
+
+## Statistical Analysis
+
+A Bayesian hierarchical methodology was implemented using the INLA approach available within the R Statistical Programming software R-INLA [@lindgrenBayesianSpatialModelling2015; @bakkaSpatialModellingRINLA2018; @rcoreteamLanguageEnvironmentStatistical2020]. In recent years, R-INLA has seen a rapid increase in use to model species distributions in both the terrestrial and marine realms [e.g. @cosandey-godinApplyingBayesianSpatiotemporal2015; @leachModellingInfluenceBiotic2016; @boudreauConnectivityPersistenceLoss2017]. This methodology solves SPDEs on a spatial triangulated mesh; the mesh is typically based on the available data [@rueBayesianComputingINLA2016]. The mesh used in this study included `r mesh.gf$n` vertices and was extended beyond the boundaries of the data to avoid edge effects (Figure \@ref(fig:Mesh)). Default priors were used for the analysis, except the range and standard deviation hyperparameters (Penalized Complexity (PC) priors) that were used to generate the random fields  [@zuurBeginnerGuideSpatial2017; @fuglstadConstructingPriorsThat2019]. The range PC prior had a median of 50 km with a probability of 0.05 that the range was smaller than 50 km. The standard deviation of the PC prior had a median of 0.5 with a probability of 0.05 that the marginal standard deviation was larger than 0.5.
+
+Survey data up to `r max(dat.final$year)` were used for model development (*Winter* survey from 1987-`r max(dat.final$year)`, *Spring* and *Fall* surveys from 1972-`r max(dat.final$year)`), data from `r max(dat.final$year+1)`-`r max(dat.final$year+3)` were used only as a testing dataset. For all analyses, the response variable was the probability of the survey detecting the stock of interest (Occurrence Probability, $OP_{it}$, where *i* is the individual observation at time *t*) and a *Bernoulli* GLM was utilized within R-INLA. Cells with an estimated OP $\geq$ `r hi.prob` were considered the *core area*. An interactive [dashboard (https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard)](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard) has been developed that can be used to explore the effect of defining different OPs as core area.
+
+$$ OP_{it} \sim Bernoulli(\pi_{it}) $$
+
+\begin{align}
+E(OP_{it}) = \pi_{it} \qquad and \qquad var(OP_{it}) = \pi_{it} \times (1-\pi_{it})
+\end{align}
+
+$$ logit(\pi_{it}) = \alpha + f(Cov_{i}) + u_{it} $$
+
+$$ u_{it} \sim GMRF(0,\Sigma) $$
+
+Each variable retained after the VIF analysis, along with each of the 4 PCA components, was added to the model individually. All continuous covariates were modelled using the INLA random walk $'rw2'$ smoother, which allows for non-linear relationships between the response and each covariate [@zuurBeginnerGuideSpatial2017; @zuurBeginnerGuideSpatial2018]. The continuous covariates were centred at their mean value and scaled by their standard deviation. Covariates that were highly skewed (e.g. depth) were log transformed before being standardized. Due to low sample size of several of the levels the Sediment type [*Sed*; data obtained from @mcmullen2014GISData2014] these infrequent categories were amalgamated into one factor level that was represented by an *Other* term, resulting in three levels for the Sediment covariate (*Other*, *Sand*, and *Gravel-Sand*). Across the three surveys approximately `r per.3.4.sed`% of the survey tows were on the *Sand* or *Gravel-Sand* bottoms and `r 100-per.3.4.sed`% were in the amalgamated *Other* category.
+
+Four spatial random field ($u_{it}$) models with differing temporal components were compared for each stock and each survey, these were a) a static random field (t = 1), b) independent random fields every 10 years, c) independent random fields every 5 years, and d) independent random fields every 3 years. The independent random fields (options b through d)  were set retroactively from the most recent year resulting in a shorter duration random field at the beginning of the time series whenever the field time period was not a multiple of the whole time series length (e.g. the 10 year random fields for the *Spring* models were 2007-2016, 1997-2006, 1987-1996, 1977-1986, and 1972-1976). Models with the same covariate structure but different random fields were compared using WAIC, CPO, and DIC; the results for each of these metrics were similar and only the WAIC results are discussed further. In all cases, the static random field was an inferior model when compared to models with multiple random fields and the results discussed here are largely limited to the comparison of the 10/5/3 year random fields. For brevity we refer to the results from each random field as an *era* (e.g. the core area estimated when using the 2012-2016 random field is the core area during the 2012-2016 era).
+
+### Model Selection Overview
+
+Models were tested using WAIC, CPO, and DIC; the results were similar for each of these diagnostics; only WAIC is discussed further. The model selection results are available in the supplement and the complete results can be found in the Model Output and Model Diagnostics sections of the interactive [dashboard](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard).
+
+Stage 1 model selection for the different covariate models was undertaken using the static random field by adding individual covariates. For this first analysis, covariates were identified if WAIC scores were more than 10 units smaller than the intercept model (e.g. SST for Atlantic Cod in the *Winter*; Figure \@ref(fig:diag-1-fe)) or were found to be low relative to the suite of models tested in multiple seasons (e.g. Dep for Atlantic Cod in the *Spring* and *Fall*; Figure \@ref(fig:diag-1-fe)). For Atlantic Cod, this analysis identified depth (*Dep*) and the average sea surface temperature between 1997 and 2008 (*SST*) as having low WAIC scores in 2 of the 3 surveys [data obtained from @greenlawGeodatabaseHistoricalContemporary2010]. For Yellowtail Flounder, Dep was identified as an informative covariate in all 3 surveys. In addition, Sed, and the average chlorophyll concentration between 1997 and 2008 (*Chl*) were retained based on their low WAIC scores in the  *Fall* survey. Given the low number of informative covariates Dep, SST, and Chl were all retained for both species in Stage 2 of model selection. In Stage 2 of model selection, the variables were added pairwise (e.g. for Atlantic Cod, the models included SST + Dep, Dep + Chl, and SST + Chl) for both stocks and again compared using WAIC with the 10-year random fields. In Stage 3 of covariate model selection, models with 3 covariates were tested based on the Stage 2 results. For Atlantic Cod, a three term model that included additive terms for SST, Dep, and Chl was the most complex model tested. For Yellowtail Flounder, the most complex model included SST, Dep, and Sed. In Stage 3, additional covariates were retained if the WAIC for that model resulted in an improvement of the WAIC of more than 2, as compared to the lowest WAIC for the more parsimonious model.
+
+Model selection on the temporal random fields was done while holding the environmental covariate terms the same.  Initial model selection for the random fields (10 and 5-year fields) was done using the Dep + SST model for both species in all seasons given the general support for the Dep + SST model identified in Stage 2 of covariate model selection. For both species this indicated that the 10-year field was inferior to the more flexible 5-year random fields.  For Atlantic Cod, the 3 and 5-year random fields were compared using the Dep + SST covariates (which was the covariate model with the lowest WAIC). For Yellowtail Flounder, the final step of the random field model selection used the Dep + SST + Sed model (which was the covariate model with the lowest WAIC) for the 3-year and 5-year random field comparison. The key model selection results are provided in the supplement and the full results can be found in the interactive [dashboard](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard). For Atlantic Cod the *final model* chosen included additive Dep and SST covariates and used a random field which changed every 5 years. For Yellowtail Flounder, the final model chosen included additive Dep, SST, and Sed covariates, the *Winter* and *Spring* models used a 3-year random field, while the *Fall* model used a 5-year random field.
+
+## Model Prediction 
+
+A predictive grid on GB was developed with cells having an area of approximately `r mesh.grid.size` km^2^ (See Supplemental Figure \@ref(fig:mesh-grid)). Each cell was intersected with average SST, Dep, and Sed fields (see Supplemental Figure \@ref(fig:SST-Dep-Sed) for the distribution of these environmental covariates) and the OP was estimated for each grid cell in each era for Atlantic Cod and Yellowtail Flounder in the *Winter*, *Spring*, and *Fall* using the final model for each stock and season respectively. The results using the predictive grid were used to calculate the size of the core area (OP $\geq$ `r hi.prob`) for each era.  
+
+The predictive grid was also used to calculate the centre of gravity (COG) of the core area for each era. The COG was calculated in the UTM coordinate system (EPSG Zone: 32619) using the easting (*X*) and northing (*Y*) for each cell identified as core area (*i*) in each era (*t*) and weighted by the OP at each of these locations.
+
+
+\begin{align} 
+x_{t}^{cog} = \frac{\sum_{i=1}^{n} (X_{i,t} \times OP_{i,t})}{\sum_{i=1}^{n}OP_{i,t}} 
+\end{align}
+
+\begin{align}
+y_{t}^{cog} = \frac{\sum_{i=1}^{n} (Y_{i,t} \times OP_{i,t})}{\sum_{i=1}^{n}OP_{i,t}}
+\end{align}
+
+The standard deviation around the mean COG in the X and Y direction was calculated as:
+
+\begin{align}
+\sigma_{cog,t}^{x} = \sqrt{\frac{ \sum_{i=1}^{n}OP_{i,t}} { [(\sum_{i=1}^{n}OP_{i,t})^2 - \sum_{i=1}^{n}OP_{i,t}^2] \times \sum_{i=1}^{n} (OP_{i,t}  \times (X_{i,t} - x_{t}^{cog})^2)}} 
+\end{align}
+
+\begin{align}
+\sigma_{cog,t}^{y} = \sqrt {\frac{ \sum_{i=1}^{n}OP_{i,t}} { [(\sum_{i=1}^{n}OP_{i,t})^2 - \sum_{i=1}^{n}OP_{i,t}^2] \times \sum_{i=1}^{n} (OP_{i,t}  \times (Y_{i,t} - y_{t}^{cog})^2)}} 
+\end{align}
+
+To quantify the ability of these models to predict the location of the stocks in future years, data from the `r max(dat.final$year+1)`-`r max(dat.final$year+3)` surveys were used as a testing dataset to predict the OP in `r max(dat.final$year+1)`, `r max(dat.final$year+2)`, and `r max(dat.final$year+3)`. In addition to the final model, an *Intercept Model* which used only the temporally varying random field for prediction (i.e. the model excluded all environmental covariates) was compared to the predictions from the final models. Both the model residual and the `r max(dat.final$year+1)`-`r max(dat.final$year+3)` predictive error were calculated for each year using Root Mean Squared Error (RMSE), Mean Average Error (MAE), and the standard deviation (SD). Given the similarity of the results only the RMSE is presented (full results are available in the interactive [dashboard](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard)).
+
+## Model Validation
+
+Five fold cross validation was used to compare the out-of-sample predictive performance for a subset of the 5-year random field models: intercept only, SST (Atlantic Cod), Dep (Yellowtail Flounder), and Dep + SST. The Atlantic Cod model validation was performed using the *Winter* survey data, the Yellowtail Flounder validation used the *Spring* survey data. The data were randomly divided into 5 subsets and trained using 4 of the subsets; the 5^th^ dataset was treated as a testing dataset to determine how well the model was able to predict out-of-sample data. Model performance was measured by comparing the model residuals from the training data to the prediction error from the testing data. The metrics used for this comparison were RMSE, MAE, and SD. Given the similarity of the results only the RMSE is presented (full results are available in the interactive [dashboard](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard)). A subset of models were chosen because of the computational demands of this validation procedure. 

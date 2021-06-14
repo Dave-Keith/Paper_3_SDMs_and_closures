@@ -1,0 +1,13 @@
+<!-- In general, you shouldn't need to edit this file with the exception of
+the following French/English translation. For a French document, set the following header to: # RÉFÉRENCES CITÉES {-} -->
+
+\newpage
+
+<br>
+
+# REFERENCES {.unnumbered} 
+<!--- This is need to make sure references go here not at the end of the document... don't ask me what it means! --->
+::: {#refs}
+:::
+
+\newpage

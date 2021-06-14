@@ -1,0 +1,97 @@
+\clearpage
+
+# FIGURES {#ref-figs}
+
+<br>
+
+```{r Overview, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Georges Bank (GB) study area.  Points represent the sample locations for each of the three surveys and the orange outline represents the core region of GB included in these analyses (42,000 km²).  The red line delineates the Canadian exclusive economic zone (EEZ)."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(over.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\clearpage
+```{r Mesh, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Delaunay triangular mesh used for the analyses. The mesh contains 6610 vertices. The red line delineates the Canadian exclusive economic zone (EEZ)."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(mesh.plt)
+```
+
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\blandscape
+\newpage
+```{r cog-hep, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Center of Gravity (COG) for the core area (OP $\\geq$ 0.75) of Atlantic Cod (top panel) and Yellowtail Flounder (bottom panels) in the Winter (left), Spring (center), and Fall (right) using the final models.  Blue lines indicate ±3 standard deviation units from the mean COG. Labels indicate the years associated with each era and the red line is border between the U.S. and Canada."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(cog.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r area-hep, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Time series of the size of the core area (OP $\\geq$ 0.75) on GB for each of the three seasons using the final models.  The Atlantic Cod time series is on the left and the Yellowtail Flounder on the right.  The black line represents the Winter trend, the blue line is the Spring trend, and the green line is the Fall trend.  "}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(area.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r area-can-vs-us-hep, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Time series of the size of the core area (OP $\\geq$ 0.75) on for each of the three seasons in Canada and the U.S..  The Atlantic Cod time series is in the top row and Yellowtail Flounder in the bottom row, Canada is on the left and U.S. is on the right.  The black line represents the Winter trend, the blue line is the Spring trend, and the green line is the Fall trend.  "}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(area.can.vs.us.plt)
+```
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r cod-fe, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Environmental covariate effects for Atlantic Cod for each season, top row is the Dep covariate effect, bottom row is the SST effect. Results have been transformed to the probability scale and the blue shaded region represents the 95\\% credible interval."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(cod.fe.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r yt-fe, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Environmental covariate effects for Yellowtail Flounder for each season, the top row is the Dep covariate effect, middle row is the SST effect, and the bottom row is the Sed effect. Results have been transformed to the probability scale, and the blue shaded region and the error bars represent the 95\\% credible intervals. The Winter and Spring results use a 3 year random field while the Fall results are for the 5 year random field model."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(yt.fe.plt)
+```
+
+
+
+\clearpage
+
+```{r hyper-range-var-est, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Decorrelation range estimate with 95\\% credible intervals for each season."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(range.field.est.plt)
+```
+
+\clearpage
+
+```{r hyper-sd-var-est, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard Deviation of the field with 95\\% credible intervals for each season."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(sd.field.est.plt)
+```
+
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r folds, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Results of five fold cross validation analyses. Top panels represents the mean error for each of the three covariate models tested for Atlantic Cod (using Winter data) and Yellowtail Flounder (using Spring data). Blue points represent the prediction error from the testing dataset, while the black points are the residuals from the training dataset. The bottom panels are the RMSE for these models.  The red dashed line represents the RMSE for randomly generated data and represents the RMSE for a model with no predictive ability. All models use the 5 year random field due to computational constraints."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(folds.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pred-17-19, echo=FALSE,out.width="100%",dpi=200,fig.cap = "The residual RMSE for the model is shown in black, while the blue lines represent the prediction RMSE for data in years 2017, 2018, and 2019. The models compared were a model with no covariates (intercept + random field) represented by the dashed line and a model which includes the additive SST and Dep covariates along with the random field represented by the solid line. Atlantic Cod results are in the top row and use a 5 year random field. Yellowtail Flounder results are in the bottom row and use a 3 year random field for the Winter and Spring and the 5 year random field for the Fall. The red dot-dash line represents the RMSE for randomly generated data and represents the RMSE for a model with no predictive ability."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pred.17.19.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\elandscape
+
