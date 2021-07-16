@@ -1,10 +1,16 @@
 ---
-title: "Differential impacts of shifting species distributions on Closed Areas"
+title: "First and Second order indicators to quantify shifting stock distributions within Closed Areas: A Case Study on Georges Bank"
 author: "DK"
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
 output:
-  word_document: default
-  html_document: default
+  bookdown::word_document2:
+    fig_caption: yes
+    number_sections: false
+  fontsize: 12pt
+  sansfont: Liberation Sans
+  mainfont: Liberation Sans
+  classoption: twocolumn
+  language: english
 params:
   date: !r Sys.Date()
 ---
@@ -15,44 +21,120 @@ params:
 
 1.  Subsequently, management agencies in both Canada and the United States (U.S.) have implemented various restrictions in an effort to rebuild these stocks; these restrictions include the implementation of closures. Yellowtail Flounder (*Limanda ferruginea*) and Atlantic Cod (*Gadus morhua*) are two groundfish stocks which have substantially declined and the rationale for closures on GB has included the need to protect these stocks. 
 
-1. In the U.S. these closures were relatively large and focused more broadly on rebuilding these and other stocks on GB. A number of closures have been implemented over the last several decades in large part to protect groundfish on Georges Bank (Murawski 2000), specifically Atlantic cod, haddock, and yellowtail flounder.  These closures were initially linked to recovery of several stocks on GB, including yellowtail and cod (Murawski 2000), but these recoveries were ephemeral and both of these stocks are currently near historical low biomass across Georges Bank. CA-II was one of the first and largest of these closures, the footprint of CA-II has largely remained unchanged since first being put in place in December of 1994, while management measures have varied over time to allow some activity in this closure, it is the longest serving and largest year-round closure on GB.
+1. In the U.S. these closures were relatively large and focused more broadly on rebuilding these and other stocks on GB. A variety of closures have been implemented over the last several decades in large part to protect groundfish on Georges Bank (Murawski 2000), specifically Atlantic Cod, Haddock, and Yellowtail Flounder flounder.  These closures were initially linked to the recovery of several stocks on GB, including Yellowtail Flounder and Atlantic Cod (Murawski 2000), but for these two stocks these recoveries were ephemeral and both of these stocks are currently near historical low biomass across Georges Bank. CA-I and CA-II were the first and largest of these closures. The footprint of CA-II has largely remained unchanged since first being put in place in December of 1994, while management measures have varied over time to allow some activity in this closure, it is the longest serving and largest year-round closure on GB. The size, focus, timing, and duration of CA-I closure has changed since it was first implemented and it is currently a seasonal closure with various fisheries allowed access.
 
-1.  Meanwhile, in Canada the closures are directed towards the protection of these cod/yellowtail stocks during spawning. There are 3 notable seasonal closures designed to protect spawning aggregations of groundfish in Canada.  Define goals of closures as best as possible given documentation available.  Groundfish closure is to not disturb spawning aggregations, what is objective of scallop closures, low bycatch or no disturbance (to KVs point). For groundfish this is easy as we will just point out where core area is during spawning, for scallop closures want to point out that we don't know if closures overlap with core area, cite the PLOS One paper.
+1.  Meanwhile, in Canada the closures are directed towards the protection of the Atlantic Cod/Yellowtail Flounder stocks during spawning. There are 3 notable seasonal closures designed to protect spawning aggregations of groundfish in Canada.  Groundfish closure is implemented to minimize the disturbance of spawning aggregations of both stocks.  The Scallop closures goals are to maintain low discards from the scallop fishery and to minimize the disturbance to the spawning aggregations from this fishery (to KVs point). 
+
+1. Talk about timing of spawning... O"Brien here.  Probably can point to our PLOS-One paper that points out that timing and size of Cod/Yellowtail closures is suspect and an analysis of the size of these closure with respect to size of spawning aggregations is needed.
 
 1.  Our objectives are to use a spatio-temporal species distribution model to 
-    - Quantify the size of and changes in 'core area' for each stock in CA-II and compare with trends observed within the rest of the U.S. waters on GB.
-    - Quantify the size of and changes in 'core area' for three spawning closures located in Canadian waters.
+    - Develop generalizable first and second order indicators that are based on presence-absence data for Yellowtail Flounder and Atlantic Cod on Georges Bank
+    - Explore how these indicators can inform our understanding of the impact in spatial and temporal shifts in the distributions of these two stocks within the various closed areas on Georges Bank.
 
 ## Methods
 
-1.  Simplify from last paper and point there for detailed model bits, here just point out what model was used for analyses based on that paper. Talk about closures and overlap mostly.  Need to clarify that for CA I and CA II we are including the portions of these closures within our analysis domain. 
+1.  Simplify from last paper and point there for detailed model bits, here just point out what model was used for analyses based on that paper. Talk about closures and overlap mostly.  Need to clarify that for CA I (and to a much much smaller extent CA II) we are including the portions of these closures within our analysis domain. Also note that spawning occurs for these two stocks during both the Winter and Spring survey (Atlantic Cod peaks during winter survey, Yellowtail Flounder peaks during Spring survey)
 
+1. Point to a new dashboard for this paper.
+
+1. First order metrics within specific areas include mean predicted EP, size of 'core area'. proportion of closure classified as core area.
+
+1. Second order metrics are more difficult to capture.  We will need a section about SD and how using the predicted SD isn't a good metric for P/A models because SD is a function of estimate.  
+  a. The standard deviation from a binomial model are a function of the probability $\sigma = n \times P(1-P)$, as *P* approaches 0 or 1 the standard deviation approaches 0.
+  a. This makes it challenging to identify areas in which the uncertainty is higher than expected.
+  a. We circumvent this by standardizing the standard deviation to create a distance metric that quantifies if the uncertainty is higher(lower) than expected at a given probability of encounter.
+  
+      i. The Encounter Probabilities are rounded into bins (*b*) of 0.01 from 0 to 1.
+      i. For each survey and stock the mean standard deviation $(\bar{\sigma}_b)$ of the predictions is calculated in each of the probability bins.
+      i. The bin mean is then subtracted from the observed standard deviation to obtain a metric of the standard deviation distance 
+         $$ D_b^{sd} = \sigma_i - \bar{\sigma}_b $$
+      i. Positive values represent areas in which the uncertainty of the prediction is higher than the mean for the survey, and negative values represent predictions in which the uncertainty is lower than expected.
+      i. This distance metric is no longer a function of the Encounter Probability and thus can be used to identify locations and times when the standard deviation is higher (lower) than average.  
 
 ## Results
 
-1.  U.S. story
+1.  First Order Indicators (Figures \@ref(fig:core-area), \@ref(fig:prop-area), \@ref(fig:ep-area))
 
-    a.   U.S. waters outside of CA-II have experienced substaintial declines in the size of the core area of both cod and yellowtail and excluding CA-II there is almost no core area remaining for either cod or yellowtail.  For both stocks the size of the core area has declined steadily over time.
-    a.   CA-II has experienced significant declines in the size of core area of Atlantic cod, but the size of the core area has rebounded after a substainal decline in the 1980s for yellowtail flounder despite widespread declines in the size of the core area throught the rest of US-GB. CA-II contains the vast majority of core area found within U.S. waters for yellowtail.  It is also now the primary area within the U.S. portion of GB that core area for cod is observed on the U.S. side of the bank.
+    a. CA-I has experienced substainal declines in the core area and EP over time for both stocks and in all 3 surveys. None of the area within CA-I has been classified as core are for Atlantic Cod for at least 20 years in any season; in the Winter and Spring approximately 50% of CA-I was classified as core area until the 1990s, while well under 25% of the closure area was classified as core area for most of the years. The EP for Atlantic Cod within CA-I has also declined by at least 50% since the 1990's; the EP also tends to be lower in the Fall within CA-I. For Yellowtail Flounder within CA-I the core area has also declined to 0 in all 3 seasons and most surveys since 2005; within CA-I the propotion of the closure classified as core area has typically been well below 50% in all three seasons. The EP for Yellowtail Flounder within CA-I has also declined over time, with the largest declines observed during the Winter and the smallest declines in the Fall; the EP for the closure in all 3 seasons is below 50% (it is below 25% in the Winter and Fall).
+    
+    a. CA-II has experienced large declines in the size of core area of Atlantic Cod, however it is now the primary area within the U.S. portion of GB that core area for Atlantic Cod is observed. The size of the core area rebounded after a substainal decline in the 1980s for Yellowtail Flounder, but has begun to decline again over the last decade. CA-II contains the vast majority of core area found within U.S. waters for Yellowtail Flounder.  The EP for Atlantic Cod in CA-II is substaintially higher in the Winter and Spring than it is in the Fall, the EP in all seasons had been relatively stable since the 1990's, but in more recent years it has declined further in the Winter and Spring.  The EP for Yellowtail Flounder in CA-II declined in the 1970s and 1980s, before rebounding in 1990s and declining again over the last decade; the EP and underlying trend in EP are relatively consistent throughout the year.
+    
+    a. The size of the core area in the Canadian groundfish closure has been relatively consistent for Atlantic Cod, though it has been in decline for at least the last decade. The size of the core area and the decline in core area has been larger in the Fall than in the Winter or Spring. For Yellowtail Flounder the size of the core area had been relatively stable since the mid-1990's, but a substainal reduction in the size of the core area was observed in the last 3-5 years. This decline was most notable during spawning in the Winter and Spring. The EP has followed similar patterns to the size of the core area, in general the EP in this closure is higher for Atlantic Cod than for Yellowtail Flounder in the Winter and Spring, with the EP in recent years approaching the lowest estimate in the time series for both stocks in all seasons.
 
-1.  Canadian story
+    a. The Cod closures have primarly been located inside the Atlantic Cod core area during spawning (Winter) but the proportion of the closure that is core area has declined substaintially in recent years.  The core area in this closure typically represents less than 10% of all core area in Canada. The EP in the Winter has also declined but it does remain above average for Canadian waters (compare to Groundfish closure trend in EP). While not designed to protect Yellowtail Flounder, this closure typically protects some Yellowtail Flounder core area when the closure is active in the Winter.
 
-    a. The size of the core area in the Canadian groundfish closure has been relatively consistent through time during spawning for both stocks. The percentage of core area on GB located within this closure has increased substatially during spawning over time for both stocks. For yellowtail this is due in part to an increase in the size of the core area in Candian waters, but also due to the decline in core area within U.S. waters outside of CA-II. The size of the core area for cod has declined slowly over time in the fall as the distribution of cod appears to be shifting outside the GB domain used for this study at this time of year.
-    a. The cod closures have primarly been located inside the cod core area during spawning, but the size of the core area in Canada is substantially larger than this closure.  This closure only protects a small fraction of the core area that is avaialbe to the COSF.
-    a. The yellowtail closures have primarly been located inside of yellowtail core area during spawning, but the size of the core area in Canada is substantially larger than this closure.  This closure only protects a small fraction of the core area that is avaialbe to the COSF.
+    a. The Yellowtail closures have primarly been located inside of Yellowtail Flounder core area during spawning (Spring), but the proportion of the closure that is core area has declined substaintially in recent years.  The core area in this closure typically represents less than 10% of all core area in Canada.  The EP in the Spring has also declined but it does remain above average for Canadian waters (compare to Groundfish closure trend in EP). While not designed to protect Atlantic Cod, this closure does contain core area for this stock when the closure is active in the Spring with the EP and size of the core area protected being similar between the two stocks.
 
+1.  Second Order (Figures \@ref(fig:sd-spatial), \@ref(fig:pe-sd) and \@ref(fig:sd-dist))
+
+    a. General pattern shows that uncertainty is higher around the edges of the study domain (no surprise). From first princples we know that EP is related to SD, but this relationship does vary by season and species (Figure \@ref(fig:pe-sd); this figure might be nicer in methods).
+    
+    a. In CA-I the standard deviation of the predictions tends to be higher than expected (positive score for SD distance metric) for Atlantic Cod and Yellowtail Flounder throughout the time series in all seasons.  The standard deviation during the Winter tends to be closer to the expected standard deviation for both stocks than during the other seasons, but it has increased over the last decade. 
+    
+    a. In CA-II the standard deviation of the predictions is slightly lower than expected for Atlantic Cod and Yellowtail Flounder. For both stocks there is minimal difference throughout the year and little change over time; the exception being a slow decline in the Winter survey for Atlantic Cod that suggests the uncertainty in the predictions has declined over time.
+    
+    a. For Atlantic Cod within the Groundfish closure the Spring and Fall prediction standard deviations are near the expected values and there has been little change in these over time.  During the Winter there has been a slow decline (similar to CA-II) in for Atlantic Cod which suggest the uncertainty in the predictions has declined over time.  For Yellowtail Flounder in the Groundfish closure area the Spring and Fall prediction standard deviations are near the expected values and there has been little change in these over time.  During the Winter the prediction standard deviation is well below the expected value for Yellowtail Flounder throughout the time series.
+    
+    a. In the Cod closure the prediction standard deviation tends to be slightly below the expecated values the majority of the time, with the lowest standard deviations during the Winter when this closure is active.
+    
+    a. In the Yellowtail closure the prediction standard deviation tends to be slightly below the expected values in the Winter and Spring when spawning occurs. When the closure is active in the Spring the standard deviation has been slighlty below the expected value in recent years, while the standard deviations are well below expectation in the Winter before the closure is active.
 
 ## Discussion
 
-1. Within U.S. waters the majority of core area remaining for both stocks is found within CA-II.  For yellowtail CA-II has remained an important area for yellowtail throughout time, despite the collapse of core area from the remainder of U.S. waters.  For cod, the remaining core area in U.S. water is only a fraction of what was observed in the past, with CA-II again housing the majority of the core area in U.S. waters.  Within the  Canadian groundfish spawning closure the size of the yellowtail core area has generally increased while the cod core area is relatively unchanged.  Given the trends in U.S. outside of CA-II this has resulted in CA-II and the Canadian closures containing an increased percentage of core area during spawning over time for both stocks.  
+1. Within the closures found in U.S. waters the size of the core areas and the EP have been in decline for both species. For Atlantic Cod both the EP and size of the core area within both closures was lower during the Fall than during the remainder of the year, Atlantic Cod largely confined to Northern portions of U.S. waters (see Dashboard).   During the Winter and Spring a substantial decline of both EP and size of the core area was observed in the 1990's and resulted in the loss of all the area classified as core area within CA-I.  For Yellowtail Flounder both the EP and size of the core area indicate a steady decline in these metrics within CA-I. While both metrics rebounded in the 1990s the metrics have again declined over the last decade. Within the Canadian closures the declines in both metrics have been more muted than observed within U.S. closures, though a general decline has been observed over the last decade in each of the Canadian closures.  In general, the trends in the Canadian closures have not been as large as observed in the U.S., but throughout the study domain the most recent era has indicated a relatively sharp decline in all the first order metrics.  The second order metrics indicated that the precision of the estimates have not changed substantially over time, with the highest uncertainties generally observed along the edges of the study domain.
 
-1. Previous analyses  within U.S. waters on GB have shown widespread benefits to the broader GB ecosystem.  These benefits were evident for yellowtail and cod in the early years of the closures (Murawski 2000) but this analysis suggests that neither stock has been consistently observed outside of CA-II in almost 3 decades.  While CA II contains much of the remaining core area for yellowtail in U.S. waters, cod have basically emigrated into Canadian waters. 
+1. Previous analyses within U.S. waters on GB have shown widespread benefits of CA-I and CA-II to the broader GB ecosystem. These benefits were evident for Yellowtail Flounder and Atlantic Cod in the early years of the closures (Murawski 2000) but the current analysis suggests that both stocks have been in decline within both CA-I and CA-II for a decade (Yellowtail Flounder) or longer (Atlantic Cod). The trends observed within the U.S. closures were less evident within the Canadian closures, but over the last decade declines were also observed across the study domain for both stocks and in all seasons.
 
-1. The smaller time-area closures that are in place for the COSF are also largely located core area, but the small size of these closures results in these closures protecting a small fraction of the core area for both stocks. A previous non-spatial analysis for the COSF closures revealed little evidence of an impact of these closures.  This analysis augments those results indicating that the core spawning area for both stocks is much larger than the size of these closures, thus these closures would have little impact on the interactions between the COSF and spawning aggregations.  Other measures, such as reduced effort and voluntary move protocols, have resulted in a substantial decline in bycatch/discards from the COSF and other more adaptive management measures would (O'Keefe) would likely be more effective if further reductions in discards from this fishery during spawning were deemed to be necessary.
+1. The smaller time-area closures that are in place to reduce the impact of the Canadian Offshore Scallop Fishery (COSF) on spawning Atlantic Cod and Yellowtail Flounder were also largely located core area, but again all metrics were in decline for these closures in more recent years.  In addition, the small size of these closures results in these closures protecting a small fraction (< 10%) of the core area within Canadian waters for both stocks. A previous non-spatial analysis for the COSF closures revealed little evidence that these closures influenced discard rates within the Canadian Offshore Scallop Fishery.  The current analysis supports the view that these closures likely had little benefit since the vast majority of core area of either stock in Canadian waters can be fished by the COSF during spawning.  Other measures, such as reduced effort and voluntary move protocols, have resulted in a substantial decline in bycatch/discards from the COSF and other more adaptive management measures would (O'Keefe) would likely be more effective if further reductions in the impact of this fishery during spawning were deemed to be necessary.
 
-1. Proper monitoring of closures is necessary to ensure they a continuing to meet their conservation objectives.  Broad ecosystem objectives for static closures likely to be more effective than closures with a narrow scope that focus on particular species given the potential for the species to move out of these areas over time when exposed to directional shifts in environmental conditions. When developing MPAs and conservation based closures we need to be mindful of the potential for species distributions to change over time, if the scope of the closure is too narrow it may no longer meet the original objectives, but of course it may well be conferring some other benefit within the ecosystem.
+1. The use of both first and second order indicators enabled a deeper understanding of both the species distributions.  The primary take away from the second order indicators was that there was no evidence of a change in the accuracy in the predictions over time. This indicates that the surveys have been doing a good job in sampling the study domain for both species.  It also indicated that uncertainty was higher along the edges, this is of course expected as samples near the edge of any spatial model will have elevated uncertainty due to lack of data, but also points out that when moving to spatial modeling you should try and sample outside the area of interest to minimize the edge effects within the study domain. This matters more for Atlantic Cod in this study as the population is migrating to the edge (and off the edge) of the bank and without samples outside the study domain you both lose information on where the stock is actually at and the uncertainty in your estimates is elevated.  Also, when developing indicators one needs to be mindful of the model you are using, e.g. if your mean is related to your SD in your model, your SD isn't necessarily a useful measure on its own.
 
-### Maybe a quick point in the discussion....
+1. Proper monitoring of closures is necessary to ensure they a continuing to meet their conservation objectives.  Broad ecosystem objectives for static closures likely to be more effective than closures with a narrow scope that focus on particular stock given the potential for the stock to move out of these areas over time when exposed to directional shifts in environmental conditions. When developing MPAs and conservation based closures we need to be mindful of the potential for species distributions to change over time, if the scope of the closure is too narrow it may no longer meet the original objectives, but of course it may well be conferring some other benefit within the ecosystem.  When developing closures with more narrow objectives (e.g. protection of a species or life history stage) the closure should be flexible enough that is is able to track shifts in the distribution; these closures also likely need more intensive monitoring to ensure the objectives of the closure are met.
 
-1.  CA-I was formerly a large year-round closure on GB, it was not directly included in this analysis because of changes in the size and management of the are over time.  It is currently a seasonal spawning closure with a much larger footprint than the closure implemented in 1994. Approximately 50% of the original closure is found within the domain of this study. The core area for both species has declined substantially within the portion of CA-I in this study, in line with the overall declines observed outside of CA-II on GB. The changes in the size of core-area can be found in our dashboard.
+1. The distributional shifts demonstrated in this study also highlight the difficulties encountered by static closed areas in achieving stock specific conservation objectives in light of environmental change. For both stocks the degree of overlap between the closed areas and the core stock area has declined over time. For the portion of CA-I included in this study, our results suggest that this area likely no longer contains substantial core habitat for Atlantic Cod or Yellowtail Flounder in the current environment at any time of the year. For the Canadian closures, while the size of the core area and encounter probabilities were more stable, there is evidence of a decline over the last decade. Finally, the Cod and Yellowtail closures protect only a small proportion of the core area in Canada and are unlikely to effectively protect spawning aggregations of either species.  The utilization of the spatio-temporal information contained in these models provides novel insights that can be used to improve science advice (e.g. accounting for shifting distributions in stock assessment, choosing the location and size of protected areas, etc) and can facilitate improved decision making related to the management of these stocks. 
+
+# Figures {#ref-fig}
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+
+```{r core-area, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Time series of the size of the core area (km^2^) for each season, stock, and closure within the study domain on Georges Bank. Vertical dotted line represents the first year of the closure. The time series for the Cod and Yellowtail closures begin in the first year the closures were active as there is no fixed location for these closures."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+core.plt <- "D:/Github/Paper_3_SDMs_and_closures/Results/Figures/Core_area_closure.png"
+knitr::include_graphics(core.plt)
+```
+
+
+```{r prop-area, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Time series of the proportion of the closure that is classified as core area for each season, stock, and closure within the study domain on Georges Bank. Vertical dotted line represents the first year of the closure. The time series for the Cod and Yellowtail closures begin in the first year the closures were active as there is no fixed location for these closures."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+prop.plt <- "D:/Github/Paper_3_SDMs_and_closures/Results/Figures/Core_prop_closure.png"
+knitr::include_graphics(prop.plt)
+```
+
+
+```{r ep-area, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Time series of the encounter probability for each season, stock, and closure within the study domain on Georges Bank. Vertical dotted line represents the first year of the closure. The time series for the Cod and Yellowtail closures begin in the first year the closures were active as there is no fixed location for these closures."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+ep.plt <- "D:/Github/Paper_3_SDMs_and_closures/Results/Figures/EP_closure.png"
+knitr::include_graphics(ep.plt)
+```
+
+
+```{r sd-spatial, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Spatio-temporal standard deviation of predicted encounter probability. Example is using Atlantic Cod in Spring."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+sd.spatial.plt <- "D:/Github/Paper_3_SDMs_and_closures/Results/Figures/deviation_spatial_plot.png"
+knitr::include_graphics(sd.spatial.plt)
+```
+
+
+```{r pe-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Relationship between Encounter probability and standard deviation for each season, stock, era, and closure."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+pe.sd.plt <- "D:/Github/Paper_3_SDMs_and_closures/Results/Figures/PE_vs_sd(PE).png"
+knitr::include_graphics(pe.sd.plt)
+```
+
+
+```{r sd-dist, echo=FALSE,out.width="100%",dpi=200,fig.cap = "The mean SD distances for each season, stock, era, and closure. Positive values indicate a SD that is above expectation."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+sd.dist.plt <- "D:/Github/Paper_3_SDMs_and_closures/Results/Figures/sd_dist_closure.png"
+knitr::include_graphics(sd.dist.plt)
+```
 

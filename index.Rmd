@@ -32,8 +32,7 @@ date: |
   ^2^ Bedford Institute of Oceanography, Fisheries and Oceans Canada, Dartmouth, Nova Scotia \
   ^3^ St. Andrews Biological Station, Fisheries and Oceans Canada, St. Andrews, New Brunswick \
   ^4^ Dalhousie University, Halifax, Nova Scotia \
-  
-     
+
 month: August # fill in
 year: 2021
 report_number: nnn
@@ -134,7 +133,7 @@ load(paste0(direct.proj,"Data/INLA_meshes.RData"))
 #load(paste0(direct.proj,"data/Prediction_fields_all_models.RData"))
 load(paste0(direct.proj,"Data/Prediction_and_Rand_fields_all_models.RData")) # Use this only for the prediction fields.
 load(paste0(direct.proj,"Data/Prediction_mesh.RData"))
-
+dat.final <- readRDS(paste0(direct.proj,"Data/survey_data_1970_2019.rds"))
 direct.proj <-  direct.tmp 
 # I think this is what I want for this, I think...
 # Grab the coorindates for CA1, CA2, and the cod/yellowtail closures which are inside this other_boundaries zip file.
@@ -151,8 +150,9 @@ CA1 <- st_transform(CA1,crs = 32619)
 CA2 <- st_read(dsn = paste0(temp2,"/CA2.shp"))
 CA2 <- st_transform(CA2,crs = 32619)
 yt.closures <- st_read(dsn =paste0(temp2,"/yt_closures.shp"))
+yt.closures <- yt.closures %>% dplyr::filter(year <= 2019)
 cod.closures <- st_read(dsn =paste0(temp2,"/cod_closures.shp"))
-
+cod.closures <- cod.closures %>% dplyr::filter(year <= 2019)
 # Now grab the coordinates for the survey boundaries for GBa and gbb, inside of the survey_boundaries zip.
 temp <- tempfile()
 # Download this to there
@@ -182,6 +182,15 @@ mesh.sf <- inla.mesh2sf(mesh.gf)
 mesh <- mesh.sf$triangles
 mesh <- st_sf(mesh,crs = st_crs(mesh.grid))
 
+clp.poly <- st_as_sf(data.frame(X = c(508000,508000,900000,650000,600000,550000),
+                                 Y=c(4540000,4350000,4674000,4674000,4661000,4622000),ID=1),coords = c("X","Y"),crs= 32619)
+clp.poly <- st_cast(st_combine(clp.poly),"POLYGON")
+# # Now use the bigger clp with this other clip to get a nice clipped GB area...
+clp.pred <- st_intersection(clp,clp.poly)
+## Add a variable to dat.final....
+dat.final$surveys <- "Spring"
+dat.final$surveys[dat.final$survey == "nmfs-fall"] <- "Fall"
+dat.final$surveys[dat.final$survey == "RV"] <- "Winter"
 
 ##### Done with data loading... Set some variables for the rest of the show..
 

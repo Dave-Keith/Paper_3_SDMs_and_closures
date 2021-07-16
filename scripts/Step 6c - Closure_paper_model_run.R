@@ -107,6 +107,7 @@ dat.all <- dat.final %>% dplyr::select("SEDNUM","comldepth","lat","lon","survey"
 # Now I'm being lazy, but the new.dat.final doesn't have the sediment field in it, need to put those together
 
 new.dat.final <- new.dat.final %>% dplyr::select("SEDNUM","comldepth","lat","lon","survey","year","unique_set_ID","cod_PA","yt_PA","X","Y","sst_avg","years_3","years_5")
+# Need to save this new data file will everything in it...
 # Order this by year here...
 new.dat.final <- new.dat.final[order(new.dat.final$year),]
 new.dat.final$cod_PA <- as.integer(new.dat.final$cod_PA)
@@ -115,6 +116,8 @@ new.dat.final$SEDNUM <- as.integer(new.dat.final$SEDNUM)
 #new.dat.final$comldepth <- -new.dat.final$comldepth
 st_geometry(new.dat.final) <- NULL
 dat.all.final <- rbind(dat.all,new.dat.final)
+#saveRDS(dat.all.final,paste0(direct.proj,"/Data/survey_data_1970_2019.rds"))
+
 # I want to set the data up here so we can get the folds identified now
 # dat.cod <-  dat.all %>% dplyr::filter(survey == "RV")
 # dat.yt <- dat.all %>% dplyr::filter(survey == "nmfs-spring")
