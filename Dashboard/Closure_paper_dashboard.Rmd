@@ -96,6 +96,8 @@ fcpo <- function(m, id)
 factor.2.number <- function(x) {as.numeric(levels(x))[x]}
 
 if(direct.proj != 'github') dat.final <- readRDS(paste0(direct.proj,"Paper_3_SDMs_and_closures/Data/survey_data_1970_2019.rds"))
+if(direct.proj == 'github') dat.final <- readRDS(url("https://raw.githubusercontent.com/Dave-Keith/Paper_3_SDMs_and_closures/master/data/survey_data_1970_2019.rds"))
+
 
 
 # The  prediction fields from our favourite models

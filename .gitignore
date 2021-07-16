@@ -7,9 +7,10 @@ knitr-figs-pdf
 reference-materials
 _bookdown_files
 
+/Results/
+
 .Rproj.user
 .Rhistory
-.RData
 .DS_Store
 
 *.aux
@@ -18,11 +19,9 @@ _bookdown_files
 *.png
 *.knit.md
 *.log
-*.rda
-*.rds
 *.Rproj
 *.sty
 *.upa
 *.utf8.md
-*.RData
+
 
