@@ -550,6 +550,7 @@ for(i in 1:n.surveys)
           tmp.yrs <- (pred.sub %>% dplyr::filter(first_year == year.to.pick) %>% dplyr::select(yrs))$yrs[1]
           tmp[[p]] <- st_intersection(preds.prob %>% dplyr::filter(first_year == year.to.pick),area %>% dplyr::filter(year ==area$year[p]))
           tmp.sd[[p]] <- st_intersection(pred.sub %>% dplyr::filter(first_year == year.to.pick),area %>% dplyr::filter(year ==area$year[p]))
+          # If there is no data I still want to create the object so we have data for the year/area combo...
           if(nrow(tmp[[p]]) ==0) 
           {
             tmp[[p]] <- tmp.sd[[p]][1,] # Just grab the first row from tmp.sd as we know we'll have data there, then delete the data and fill it with NAs....
