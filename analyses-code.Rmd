@@ -173,7 +173,13 @@ GB.pred.area <- clp.pred %>% st_area() %>% set_units("km^2") # So really about 4
 
 can.pred.area <- st_intersection(clp.pred,eez.can) %>% st_area() %>% set_units("km^2")
 us.pred.area <- st_difference(clp.pred,eez.can) %>% st_area() %>% set_units("km^2")
-
+# This is an approximate polygon of the US side of Georges Bank
+us.gb <- st_difference(clp.pred,eez.can)
+# Now clip it so it doesn't overlap with the scallop survey area...
+gba.surv2 <- st_transform(gba.surv,crs=32619)
+us.gb2 <- st_difference(us.gb,gba.surv2)
+us.gb2 <- st_zm(us.gb2, drop = TRUE, what = "ZM") # Drop the Z coordinate, which I don't even know what that is!
+#st_write(us.gb2,dsn="D:/Github/Paper_3_SDMs_and_closures/data/US_polygon/USA_GB_poly.shp")
 
 
 #####
@@ -398,7 +404,7 @@ n.areas <- length(areas)
 #Here's our workhorse, from the dashboard with modifications for SD....
 
 surveys <-   unique(pred.res$survey)
-n.survyes <- length(surveys)
+n.surveys <- length(surveys)
 specs <- unique(pred.res$species)
 n.specs <- length(specs)
 

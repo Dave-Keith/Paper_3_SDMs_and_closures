@@ -1,0 +1,1928 @@
+---
+output:
+  # bookdown::word_document2:
+  #   fig_caption: yes
+  #   number_sections: false
+  # fontsize: 12pt
+  # sansfont: Liberation Sans
+  # mainfont: Liberation Sans
+  # classoption: twocolumn
+  # language: english
+  # bookdown::html_document2: default
+  bookdown::pdf_document2:
+      keep_tex: yes
+      number_sections: no      
+      toc: no
+      #citation_package: biblatex
+  fontsize: 12pt
+  sansfont: Liberation Sans
+  mainfont: Liberation Sans
+  classoption: twocolumn
+  language: english
+  
+# End of options to set
+title: "GB Closures and SDMs"
+author: |
+  David M. Keith^1,2,4^,
+  Jessica A. Sameoto^2^,
+  Freya M. Keyser^2^, and
+  Irene Andrushchenko^3^
+date: |
+  ^1^ Corresponding author - david.keith@dfo-mpo.gc.ca \
+  ^2^ Bedford Institute of Oceanography, Fisheries and Oceans Canada, Dartmouth, Nova Scotia \
+  ^3^ St. Andrews Biological Station, Fisheries and Oceans Canada, St. Andrews, New Brunswick \
+  ^4^ Dalhousie University, Halifax, Nova Scotia \
+
+month: August # fill in
+year: 2021
+report_number: nnn
+region: Maritimes Region
+author_list: "Keith, D.M., Sameoto, J.A., Keyser, F.M., Andrushchenko, I."
+abstract: |
+  Closures....  
+#header: "Draft working paper --- Do not cite or circulate" # or "" to omit
+
+knit: bookdown::render_book
+link-citations: true
+bibliography: Y:/Zotero/MAR_SABHU.bib
+csl: D:/Github/styles-distribution/ices-journal-of-marine-science.csl
+# Any extra LaTeX code for the header:
+#  Note that if you need to include more than one package you will have to have them on the same line like this:
+header-includes: 
+ - \usepackage{tikz} \usepackage{pdflscape}
+ - \newcommand{\blandscape}{\begin{landscape}}
+ - \newcommand{\elandscape}{\end{landscape}}
+ - \newcommand{\beginsupplement}{\setcounter{table}{0}  \renewcommand{\thetable}{S\arabic{table}} \setcounter{figure}{0} \renewcommand{\thefigure}{S\arabic{figure}}}
+ - \usepackage{lineno}
+ - \linenumbers
+ - \usepackage{setspace} \doublespacing
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE, message=FALSE, results='hide', warning=FALSE}
+library(knitr)
+
+##### Bring in the data and functions
+library(readxl)
+library(xtable)
+library(pander)
+library(png)
+library(PBSmapping)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(betareg)
+library(MASS)
+library(tidyverse)
+library(mgcv)
+library(boot)
+library(cowplot)
+library(ggbiplot)
+library(sf)
+library(sp)
+library(RCurl)
+library(units)
+library(nngeo)
+library(data.table)
+library(ggthemes)
+library(caret)
+library(concaveman)
+library(rosettafish)
+library(readr)
+library(tibble)
+library(kableExtra)
+
+# Bring in our in house functions. First combine them all in a vector
+funs <- c("https://raw.githubusercontent.com/Mar-Scal/Assessment_fns/master/Maps/pectinid_projector_sf.R",
+          "https://raw.githubusercontent.com/Mar-Scal/Assessment_fns/master/Maps/convert_inla_mesh_to_sf.R",
+          "https://raw.githubusercontent.com/Mar-scal/Assessment_fns/master/Maps/centre_of_gravity.R",
+          "https://raw.githubusercontent.com/Mar-scal/Assessment_fns/master/Maps/add_alpha_function.R")
+# Now run through a quick loop to load each one, just be sure that your working directory is read/write!
+for(fun in funs) 
+{
+  download.file(fun,destfile = basename(fun))
+  source(paste0(getwd(),"/",basename(fun)))
+  file.remove(paste0(getwd(),"/",basename(fun)))
+}
+
+#eval(parse(text =getURL("https://raw.githubusercontent.com/Mar-scal/Assessment_fns/master/Maps/convert_inla_mesh_to_sf.R",ssl.verifypeer = FALSE)))
+#source("D:/Github/Offshore/Assessment_fns/DK/Maps/convert_inla_mesh_to_sf.R")
+#source("D:/Github/Offshore/Assessment_fns/DK/Maps/pectinid_projector_sf.R")
+# Here's a little custom function that you can use to set breakpoints in a facet plot, this one is set up the make Depth and SST's look nice
+# used in combo with scale_x_continuous() in ggplot
+breaks_fun <- function(x)  if (max(x) > 15) { seq(0,300,50) } else { seq(8, 14, 0.5) }
+factor.2.number <- function(x) {as.numeric(levels(x))[x]} # My friend factor.2.number
+# Function in case you need it for transforming propotion data to not have 0's and 1's.  
+beta.transform <- function(dat,s=0.5)  (dat*(length(dat)-1) + s) / length(dat)
+# Just so this code is easily portable over to our eventual Res Doc..
+french = FALSE
+#direct.proj <- "Y:/Projects/GB_time_area_closure_SPERA/" 
+direct.proj <- "D:/Github/Paper_3_SDMs_and_closures/"; direct.tmp <- direct.proj
+# The prediction prop function
+source(paste0(direct.proj,"Scripts/predicted_prob_time_series_function.R"))
+```
+
+```{r data-load, echo=FALSE, cache=T, message=FALSE, results='hide', warning=FALSE}
+
+# Some crap we need to load
+#load(paste0(direct.proj,"Data/SST_and_Depth_covariates_and_boundary_for_prediction.RData"))
+load(paste0(direct.proj,"Data/INLA_mesh_input_data.RData"))
+load(paste0(direct.proj,"Data/INLA_meshes.RData"))
+#load(paste0(direct.proj,"data/Depth_SST_and_Sed_on_GB.RData"))
+#load(paste0(direct.proj,"data/Prediction_fields_all_models.RData"))
+load(paste0(direct.proj,"Data/Prediction_and_Rand_fields_all_models.RData")) # Use this only for the prediction fields.
+load(paste0(direct.proj,"Data/Prediction_mesh.RData"))
+dat.final <- readRDS(paste0(direct.proj,"Data/survey_data_1970_2019.rds"))
+direct.proj <-  direct.tmp 
+# I think this is what I want for this, I think...
+# Grab the coorindates for CA1, CA2, and the cod/yellowtail closures which are inside this other_boundaries zip file.
+temp <- tempfile()
+# Download this to there
+download.file("https://raw.githubusercontent.com/Mar-scal/GIS_layers/master/other_boundaries/other_boundaries.zip", temp)
+# Figure out what this file was saved as
+temp2 <- tempfile()
+# Unzip it
+unzip(zipfile=temp, exdir=temp2)
+# Now grab the individual shape files I want.
+CA1 <- st_read(dsn = paste0(temp2,"/CA1.shp"))
+CA1 <- st_transform(CA1,crs = 32619)
+CA2 <- st_read(dsn = paste0(temp2,"/CA2.shp"))
+CA2 <- st_transform(CA2,crs = 32619)
+yt.closures <- st_read(dsn =paste0(temp2,"/yt_closures.shp"))
+yt.closures <- yt.closures %>% dplyr::filter(year <= 2019)
+cod.closures <- st_read(dsn =paste0(temp2,"/cod_closures.shp"))
+cod.closures <- cod.closures %>% dplyr::filter(year <= 2019)
+# Now grab the coordinates for the survey boundaries for GBa and gbb, inside of the survey_boundaries zip.
+temp <- tempfile()
+# Download this to there
+download.file("https://raw.githubusercontent.com/Mar-scal/GIS_layers/master/survey_boundaries/survey_boundaries.zip", temp)
+# Figure out what this file was saved as
+temp2 <- tempfile()
+# Unzip it
+unzip(zipfile=temp, exdir=temp2)
+# And we get GBa and GBb from there
+gba.surv <- st_read(dsn = paste0(temp2,"/GBa.shp"))
+gbb.surv <- st_read(dsn = paste0(temp2,"/GBb.shp"))
+# Make an 'all of gb' sf object
+gb.surv <- st_union(gba.surv,gbb.surv)
+# This removes holes, still have one small artifact out to the east, but it matters little...
+gb.surv <- nngeo::st_remove_holes(gb.surv)
+gb.surv <- st_transform(gb.surv,crs= 32619)
+scal.tot.area <- st_area(gb.surv) %>% set_units("km^2")
+# Put all the closures together so we can easily plot them.
+all.closures <- c(st_geometry(CA1),st_geometry(CA2),st_geometry(yt.closures),st_geometry(cod.closures))
+
+# The survey data, in sf form
+dat.sf <- st_as_sf(dat.final, coords = c('lon','lat'),crs = 4326,remove=F)
+dat.sf <- st_transform(dat.sf,crs = 32619)
+# I need to make the mesh.grid a nicer sf object
+mesh.grid <- st_sf(mesh.grid)
+mesh.sf <- inla.mesh2sf(mesh.gf)
+mesh <- mesh.sf$triangles
+mesh <- st_sf(mesh,crs = st_crs(mesh.grid))
+
+clp.poly <- st_as_sf(data.frame(X = c(508000,508000,900000,650000,600000,550000),
+                                 Y=c(4540000,4350000,4674000,4674000,4661000,4622000),ID=1),coords = c("X","Y"),crs= 32619)
+clp.poly <- st_cast(st_combine(clp.poly),"POLYGON")
+# # Now use the bigger clp with this other clip to get a nice clipped GB area...
+clp.pred <- st_intersection(clp,clp.poly)
+## Add a variable to dat.final....
+dat.final$surveys <- "Spring"
+dat.final$surveys[dat.final$survey == "nmfs-fall"] <- "Fall"
+dat.final$surveys[dat.final$survey == "RV"] <- "Winter"
+
+##### Done with data loading... Set some variables for the rest of the show..
+
+if (is_latex_output()) {
+  knitr_figs_dir <- "knitr-figs-pdf/"
+  knitr_cache_dir <- "knitr-cache-pdf/"
+  fig_out_type <- "png"
+} else {
+  knitr_figs_dir <- "knitr-figs-docx/"
+  knitr_cache_dir <- "knitr-cache-docx/"
+  fig_out_type <- "png"
+}
+fig_asp <- 0.618
+fig_width <- 9
+fig_out_width <- "6in"
+fig_dpi <- 180
+fig_align <- "center"
+fig_pos <- "htb"
+opts_chunk$set(
+  collapse = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>",
+  fig.path = knitr_figs_dir,
+  cache.path = knitr_cache_dir,
+  fig.asp = fig_asp,
+  fig.width = fig_width,
+  out.width = fig_out_width,
+  echo = FALSE,
+  #  autodep = TRUE,
+  #  cache = TRUE,
+  cache.comments = FALSE,
+  dev = fig_out_type,
+  dpi = fig_dpi,
+  fig.align = fig_align,
+  fig.pos = fig_pos
+)
+options(xtable.comment = FALSE)
+options(kableExtra.latex.load_packages = FALSE)
+
+
+# Don't use scientific notation please!!
+options(scipen=999)
+# Set a nice theme for the ggplots unless I override
+
+# For examplorary purposes I've kept the option to translate to French, and to ID if we are making a word or pdf docnot needed otherwise.
+# `french` is extracted from the YAML header metadata, also later we use metadata to make sure the tables are formatted correctly for word/pdf
+meta <- rmarkdown::metadata$output
+
+if(meta$language == 'french'){ french = T} else {french = F}
+print(french)
+# if(length(grep("pdf", names(meta)))){
+#   #french <- meta$`bookdown::pdf_document2`$french
+#   prepub <- meta$`bookdown::pdf_document2`$prepub
+# }else if(length(grep("word", names(meta)))){
+#   #french <- meta$`bookdown::word_document2`$french
+#   prepub <- meta$`bookdown::word_document2`$prepub
+# }
+if(french) options(OutDec =  ",")
+
+
+
+```
+
+
+
+<!--chapter:end:index.Rmd-->
+
+<!-- Set the theme for the figures -->
+```{r theme, echo=F, include=F, paged.print=FALSE,cache =F}
+theme_set(theme_few(base_size = 12))
+```
+
+<!-- Bring in the data + figures   -->
+
+```{r pred-data, echo=F, include=F, paged.print=FALSE,cache =T}
+
+# Decide what you want "Hi probablity" to be for this analysis..
+hi.prob <- 0.75
+
+
+# Now I want to make the prediction field from the new prediction models
+mod.names <- names(pred.dat)
+n.mods <- length(mod.names)
+pred.res <- NULL
+pred.rf <- NULL
+for(i in 1:n.mods)
+{
+  res <- pred.dat[[mod.names[i]]]
+  rf <- rand.field.pred[[mod.names[[i]]]]
+  # Easy way to pick 3 vs 5 year since I kept both columns but NA'ed the one not being used
+  if(all(is.na(res$years_3)))
+  {
+    n.eras <- length(unique(res$years_5))
+    eras <- factor.2.number(unique(res$years_5))
+  } # End if loop
+  
+  # Easy way to pick 3 vs 5 year since I kept both columns but NA'ed the one not being used
+  if(all(is.na(res$years_5)))
+  {
+    n.eras <- length(unique(res$years_3))
+    eras <- factor.2.number(unique(res$years_3))
+  } # end if loop
+  
+  res <- st_as_sf(res,coords = c("X","Y"), crs = st_crs(mesh.grid),remove = F)
+  mesh.tmp <- st_sf(rep(st_sf(mesh.sf$vertices)$geometry,n.eras), crs = st_crs(mesh.grid))
+  mesh.tmp$ID <- rf$ID <- 1:nrow(rf)
+  rf$era <- sort(rep(eras,nrow(mesh.sf$vertices)))
+  rf <- merge(mesh.tmp,rf, by = "ID")
+
+# Set the colors un
+  # Now for some reason my prediction grid doesn't quite line up with my prediciton mesh, so clip the mesh to match
+  res <- st_join(mesh.grid,res)
+  rf <- st_intersection(rf,clp.pred)
+  for(n in min(eras):max(eras))
+  {
+    if(all(is.na(res$years_3)))
+    {
+    yrs <- paste0(substr(dat.final %>% filter(years_5 == n, survey == unique(res$survey)) %>% dplyr::summarise(min = min(year)),3,4),"-",
+                  substr(dat.final %>% dplyr::filter(years_5 == n, survey == unique(res$survey)) %>% dplyr::summarise(max = max(year)),3,4))
+    if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+    res$yrs[res$years_5==n] <- yrs
+    rf$yrs[rf$era == n] <- yrs
+    }
+    
+    if(all(is.na(res$years_5)))
+    {
+      yrs <- paste0(substr(dat.final %>% filter(years_3 == n, survey == unique(res$survey)) %>% dplyr::summarise(min = min(year)),3,4),"-",
+                    substr(dat.final %>% dplyr::filter(years_3 == n, survey == unique(res$survey)) %>% dplyr::summarise(max = max(year)),3,4))
+      if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+      res$yrs[res$years_3==n] <- yrs
+      rf$yrs[rf$era == n] <- yrs
+    }
+    
+  } # end   for(n in min(eras):max(eras))
+
+  res <- res[!is.na(res$yrs),]
+  rf <- rf[!is.na(rf$yrs),]
+  # So calculating area is smart using that set units, though they are all idenitcal...
+  res$area <- res %>% st_area() %>% set_units("km^2")
+  res <- res %>% dplyr::filter(pred >= 0) # THIS IS SUPER IMPORTANT!!  WHAT IS THE probability we are looking at for this.
+  pred.res[[mod.names[i]]] <- res
+  pred.rf[[mod.names[i]]] <- rf
+} # end for (i) loop
+
+# This is the thing I need to make the prediction plots and also for the COG and area calculations.
+pred.res <- do.call("rbind",pred.res) # This is a useful general purpose object I want
+pred.rf <- do.call("rbind",pred.rf)
+
+pred.res$species[pred.res$species == "yt_PA"] <- "Yellowtail"
+pred.res$species[pred.res$species == "cod_PA"] <- "Cod"
+pred.res$survey[pred.res$survey == "nmfs-spring"] <- "Spring"
+pred.res$survey[pred.res$survey == "nmfs-fall"] <- "Fall"
+pred.res$survey[pred.res$survey == "RV"] <- "Winter"
+pred.res$survey <- factor(pred.res$survey, levels = c("Winter","Spring","Fall"))
+# Now the randome field...
+pred.rf$species[pred.rf$species == "yt_PA"] <- "Yellowtail"
+pred.rf$species[pred.rf$species == "cod_PA"] <- "Cod"
+pred.rf$survey[pred.rf$survey == "nmfs-spring"] <- "Spring"
+pred.rf$survey[pred.rf$survey == "nmfs-fall"] <- "Fall"
+pred.rf$survey[pred.rf$survey == "RV"] <- "Winter"
+pred.rf$survey <- factor(pred.rf$survey, levels = c("Winter","Spring","Fall"))
+```
+
+
+```{r area-calcs, echo=F, include=F, paged.print=FALSE,cache =T}
+
+# I want the EEZ shape file to split up Canada and US
+# Figure out where your tempfiles are stored
+temp <- tempfile()
+# Download this to the temp directory you created above
+download.file("https://raw.githubusercontent.com/Mar-scal/GIS_layers/master/EEZ/EEZ.zip", temp)
+#$ Figure out what this file was saved as
+temp2 <- tempfile()
+# Unzip it
+unzip(zipfile=temp, exdir=temp2)
+# Now read in the shapefile
+eez.all <- st_read(paste0(temp2, "/EEZ.shp"))
+rm(temp,temp2)
+clp.eez <- st_as_sf(data.frame(X = c(-70,-70,-62.2,-62.2),Y = c(39,44,44,39)),coords = c("X","Y"),crs = 4326)
+clp.eez <- st_cast(st_combine(clp.eez),"POLYGON")
+eez.all <- eez.all %>% st_transform(4326)
+tmp <- st_intersection(eez.all,clp.eez)
+eez.can <- concaveman(tmp)
+eez.can <- eez.can %>% st_transform(32619)
+# I think this is what I want for this, I think...
+# Grab the coorindates for CA1, CA2, and the cod/yellowtail closures which are inside this other_boundaries zip file.
+temp <- tempfile()
+# Download this to there
+download.file("https://raw.githubusercontent.com/Mar-scal/GIS_layers/master/other_boundaries/other_boundaries.zip", temp)
+# Figure out what this file was saved as
+temp2 <- tempfile()
+# Unzip it
+unzip(zipfile=temp, exdir=temp2)
+# Now grab the individual shape files I want.
+CA1 <- st_read(dsn = paste0(temp2,"/CA1.shp"))
+CA1 <- st_transform(CA1,crs = 32619)
+CA2 <- st_read(dsn = paste0(temp2,"/CA2.shp"))
+CA2 <- st_transform(CA2,crs = 32619)
+yt.closures <- st_read(dsn =paste0(temp2,"/yt_closures.shp"))
+yt.closures<- st_transform(yt.closures,crs=32619)
+cod.closures <- st_read(dsn =paste0(temp2,"/cod_closures.shp"))
+cod.closures <- st_transform(cod.closures,crs=32619)
+rm(temp,temp2)
+# Now grab the coordinates for the survey boundaries for GBa and gbb, inside of the survey_boundaries zip.
+temp <- tempfile()
+# Download this to there
+download.file("https://raw.githubusercontent.com/Mar-scal/GIS_layers/master/survey_boundaries/survey_boundaries.zip", temp)
+# Figure out what this file was saved as
+temp2 <- tempfile()
+# Unzip it
+unzip(zipfile=temp, exdir=temp2)
+# And we get GBa and GBb from there
+gba.surv <- st_read(dsn = paste0(temp2,"/GBa.shp"))
+gbb.surv <- st_read(dsn = paste0(temp2,"/GBb.shp"))
+# Make an 'all of gb' sf object
+gb.surv <- st_union(gba.surv,gbb.surv)
+# This removes holes, still have one small artifact out to the east, but it matters little...
+gb.surv <- nngeo::st_remove_holes(gb.surv)
+gb.surv <- st_transform(gb.surv,crs= 32619)
+scal.tot.area <- st_area(gb.surv) %>% set_units("km^2")
+# Put all the closures together so we can easily plot them.
+all.closures <- c(st_geometry(CA1),st_geometry(CA2),st_geometry(yt.closures),st_geometry(cod.closures))
+
+# The survey data, in sf form
+dat.sf <- st_as_sf(dat.final, coords = c('lon','lat'),crs = 4326,remove=F)
+dat.sf <- st_transform(dat.sf,crs = 32619)
+##### Done with data loading... Set some variables for the rest of the show..
+
+# Decide what you want "Hi probablity" to be for this analysis..
+hi.prob <- 0.75
+
+
+# #  A nice clean polygon of the core of the GB area we want to deal with here.
+ clp.poly <- st_as_sf(data.frame(X = c(508000,508000,900000,650000,600000,550000),
+                                 Y=c(4540000,4350000,4674000,4674000,4661000,4622000),ID=1),coords = c("X","Y"),crs= 32619)
+ clp.poly <- st_cast(st_combine(clp.poly),"POLYGON")
+# # Now use the bigger clp with this other clip to get a nice clipped GB area...
+ clp.pred <- st_intersection(clp,clp.poly)
+GB.pred.area <- clp.pred %>% st_area() %>% set_units("km^2") # So really about 42,000 km in our clip area, good.
+
+can.pred.area <- st_intersection(clp.pred,eez.can) %>% st_area() %>% set_units("km^2")
+us.pred.area <- st_difference(clp.pred,eez.can) %>% st_area() %>% set_units("km^2")
+# This is an approximate polygon of the US side of Georges Bank
+us.gb <- st_difference(clp.pred,eez.can)
+# Now clip it so it doesn't overlap with the scallop survey area...
+gba.surv2 <- st_transform(gba.surv,crs=32619)
+us.gb2 <- st_difference(us.gb,gba.surv2)
+us.gb2 <- st_zm(us.gb2, drop = TRUE, what = "ZM") # Drop the Z coordinate, which I don't even know what that is!
+#st_write(us.gb2,dsn="D:/Github/Paper_3_SDMs_and_closures/data/US_polygon/USA_GB_poly.shp")
+
+
+#####
+# Data for Center of gravity of the species distributions has shifted
+#####
+# So here we need the predicted field for each model. I think we want to show how COG has moved for cod and yellowtail
+# and have a panel for each survey, might end up being better as 2 figures, not sure yet.  But we'll want 6 cogs
+# I also want to clean up the names in pred.dat (could come in handy throughout rather that using the labeller everywhere..
+
+names.survs <- unique(pred.res$model)
+pred.cog <- NULL
+
+for(i in 1:length(names.survs))
+{
+  res <- pred.res %>% filter(model == names.survs[i])
+  
+  # Easy way to pick 3 vs 5 year since I kept both columns but NA'ed the one not being used
+  if(all(is.na(res$years_3)))
+  {
+    n.eras <- length(unique(res$years_5))
+    eras <- factor.2.number(unique(res$years_5))
+  } # End if loop
+  
+  # Easy way to pick 3 vs 5 year since I kept both columns but NA'ed the one not being used
+  if(all(is.na(res$years_5)))
+  {
+    n.eras <- length(unique(res$years_3))
+    eras <- unique(res$years_3)
+  } # end if loop
+    
+  # Make this into an sf object
+ # res <- st_as_sf(res,coords = c("X","Y"), crs = st_crs(mesh.grid),remove = F)
+  # Combine the mesh into the results so we have predictions at each mesh element
+  #res <- st_join(mesh.grid,res)  
+  # Get the years right for each input.
+ for(n in min(eras):max(eras))
+  {
+    if(all(is.na(res$years_3)))
+    {
+    yrs <- paste0(substr(dat.final %>% filter(years_5 == n, surveys == as.character(unique(res$survey))) %>% dplyr::summarise(min = min(year)),3,4),"-",
+                  substr(dat.final %>% dplyr::filter(years_5 == n, surveys == unique(res$survey)) %>% dplyr::summarise(max = max(year)),3,4))
+    if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+    res$yrs[res$years_5==n] <- yrs
+    }
+    
+    if(all(is.na(res$years_5)))
+    {
+      yrs <- paste0(substr(dat.final %>% filter(years_3 == n, surveys == unique(res$survey)) %>% dplyr::summarise(min = min(year)),3,4),"-",
+                    substr(dat.final %>% dplyr::filter(years_3 == n, surveys == unique(res$survey)) %>% dplyr::summarise(max = max(year)),3,4))
+      if(substr(yrs[1],1,2) > 30) { yrs <- paste0(19,yrs)} else {yrs <- paste0(20,yrs)}
+      res$yrs[res$years_3==n] <- yrs
+    }
+    
+  } # end   for(n in min(eras):max(eras))
+
+  res <- res[!is.na(res$yrs),]
+  # So calculating area is smart using that set units, though they are all idenitcal...
+  res$area <- res %>% st_area() %>% set_units("km^2")
+  res <- res %>% filter(pred >= hi.prob) # THIS IS SUPER IMPORTANT!!  WHAT IS THE probability we are looking at for this.
+
+  cog_n_area <- as.data.table(res)[,cog.calc(X,Y,pred), by = yrs]
+  cog_n_area <- cog_n_area[order(cog_n_area$yrs)]
+  cog_n_area <- st_as_sf(cog_n_area,coords = c('x','y'), crs= st_crs(mesh.grid), remove=F)
+  area <- res %>% group_by(yrs) %>% dplyr::summarise(area = sum(area))
+  st_geometry(area) <- NULL
+  cog_n_area$area <- area$area
+  # This object has what we need for COG and area calcs.  
+  cog_n_area$mod <- names.survs[i]
+  cog_n_area$species <- res$species[1]
+  cog_n_area$survey <- res$survey[1]
+  pred.cog[[names.survs[i]]] <- cog_n_area
+}
+
+
+cog.n.area <- do.call('rbind',pred.cog)
+# Make names nice...=
+
+#cog.n.area$eras <- as.numeric(factor(cog.n.area$yrs, labels =1:length(unique(cog.n.area$yrs))))
+```
+
+```{r combo-pred-rf, echo=F, include=F,cache=T}
+
+# Some messing about with standard deviaiotns, second order indicators.... hmmm
+
+pred.res$year_era <- as.numeric(substr(pred.res$yrs,1,4))
+# How does sd change over time....
+pred.mn.sd <- pred.res %>% group_by(species,year_era,survey) %>% dplyr::summarise(mn.sd = mean(pred.sd))
+rf.mn.sd <- pred.rf %>% group_by(species,era,survey) %>% dplyr::summarise(mn.sd = mean(sd))
+# How about we intersect the pred.res with the random field and compare the predictions against the random field...
+# Don't do this, it takes like 20 minutes!
+# tst <- st_intersection(pred.rf,pred.res)
+# tst
+
+
+# So to combine the rf and pred fields without creating 13,000,000 duplicates we need to do this by survey/species/era...
+#surveys <- unique(pred.res$survey)
+surveys <- unique(pred.rf$survey) 
+n.surveys <- length(surveys)
+species <-unique(pred.rf$species)
+n.species <- length(species)
+
+prf.tmp <- NULL
+prf2.tmp <- NULL
+for(i in 1:n.surveys)
+{
+  for(j in 1:n.species)
+  {
+    spec <- species[j]
+    surv <- surveys[i]
+    pred.tmp <- pred.res %>% dplyr::filter(survey == surv, species  == spec)
+    rf.tmp <- pred.rf %>% dplyr::filter(survey == surv,species == spec)
+    eras <- unique(pred.tmp$year_era)
+    n.eras <- length(eras)
+    for(k in 1:n.eras)
+    {
+      er <- eras[k]
+      pred.tmp2 <- pred.tmp %>% filter(year_era == er)
+      rf.min.era <- min(rf.tmp$era)
+      rf.tmp2 <- rf.tmp %>% filter(era == (rf.min.era + k -1))
+      tmp <- st_intersection(pred.tmp2,rf.tmp2)
+      prf.tmp[[as.character(k)]] <- tmp
+    }
+    prf2.tmp[[paste0(surveys[i],"_",species[j])]] <- do.call("rbind",prf.tmp)
+  }
+}
+
+pred.and.rf.fields <- do.call("rbind",prf2.tmp)
+pred.and.rf.fields$survey <- factor(pred.and.rf.fields$survey, levels = c("Winter","Spring","Fall"))
+
+cols <- addalpha(c("red","blue","grey"),1)
+p.pred.mn <- ggplot(pred.mn.sd) + geom_line(aes(x = year_era,y = mn.sdsurvey)) + facet_wrap(~species)  + scale_color_manual(values = cols) + theme_few()
+p.rf.mn <- ggplot(rf.mn.sd) + geom_line(aes(x = era,y = mn.sd,color= survey)) + facet_wrap(~species) + scale_color_manual(values = cols) + theme_few()
+
+# Plotting predictions against their standard deviation.  Note that sd peaks when P(E) is near 0.5, so need to standardize by P(E)
+# to identify areas where sd is higher than expectation.
+cols <- addalpha(c("red","blue","grey"),0.2)
+p.sd <- ggplot(pred.res) + geom_point(aes(x=pred.sd,y=pred,color=survey),size=0.25) + theme_few() + facet_wrap(~species+ year_era) + 
+  ylab("Probability of encounter") + xlab("Standard Deviation of P(encounter)") + scale_color_manual(values = cols) 
+save_plot(paste0(direct.proj,"Results/Figures/PE_vs_sd(PE).png"),p.sd,base_width =11,base_height =8,units='in')
+
+# Not really interesting I don't think...
+# rf.sd <- ggplot(pred.rf) + geom_point(aes(x=sd,y=mean,color=survey),size=0.25) + theme_few() + facet_wrap(~species+era) + ylab("Mean of Random Field") + 
+#   xlab("Standard Deviation of Random Field") + scale_color_manual(values = cols) 
+# save_plot(paste0(direct.proj,"Results/Figures/RF_vs_sd(RF).png"),rf.sd,base_width =11,base_height =8,units='in')
+# 
+# rf.pred.sd <- ggplot(pred.and.rf.fields) + geom_point(aes(x=sd,y=pred,color = survey),size=0.25) + facet_wrap(~species+year_era)+ theme_few() +  
+#    ylab("Probability of encounter") + xlab("Standard Deviation of Random Field") + scale_color_manual(values = cols) 
+#  save_plot(paste0(direct.proj,"Results/Figures/Pred_vs_sd(RF).png"),rf.pred.sd,base_width =11,base_height =8,units='in')
+
+ 
+ ## So I don't think the sd from the random field is interesteing, but a modified version of the sd of th prediction field might me.  
+ ## I think we want to bin the sd by prediciion (at 1% increments) and identify if the sd is above or below median for the sd bin... 
+ ## something like
+ 
+pred.res$pred.bin <- round(pred.res$pred,digits =2)
+hmm <- data.frame(pred.res) %>% dplyr::group_by(pred.bin,survey,species) %>% dplyr::summarize(mn.sd.bin = mean(pred.sd))
+pred.res <- left_join(pred.res,hmm,by=c("pred.bin","survey","species"))
+pred.res <- pred.res %>% dplyr::mutate(sd.dist = pred.sd-mn.sd.bin, stan.sd.dist = (pred.sd-mn.sd.bin)/mn.sd.bin)
+# Do the same thing with the random field intersection object...
+pred.and.rf.fields$pred.bin <- round(pred.and.rf.fields$pred,digits =2)
+hmm <- data.frame(pred.and.rf.fields) %>% dplyr::group_by(pred.bin,survey,species) %>% dplyr::summarize(mn.sd.bin = mean(pred.sd))
+pred.and.rf.fields <- left_join(pred.and.rf.fields,hmm,by=c("pred.bin","survey","species"))
+pred.and.rf.fields <- pred.and.rf.fields %>% dplyr::mutate(sd.dist = pred.sd-mn.sd.bin, stan.sd.dist = (pred.sd-mn.sd.bin)/mn.sd.bin)
+
+
+# pred.vs.dev.sd <- ggplot(pred.res) + geom_point(aes(x=stan.sd.dist,y=pred,color = survey),size=0.25) + facet_wrap(~species+year_era)+ theme_few() +  
+#    ylab("Probability of encounter") + xlab("Deviation from standard deviation") + scale_color_manual(values = cols) 
+#  save_plot(paste0(direct.proj,"Results/Figures/Pred_vs_deviation(sd).png"),pred.vs.dev.sd,base_width =11,base_height =8,units='in')
+# 
+# # What is the relationship between the Random field residual and our new metric, are we just recreating the RF uncertainty or is there something else in here...
+# # Not seeing any real realtionship in general, 
+# rf.vs.dev.sd <- ggplot(pred.and.rf.fields) + geom_point(aes(x=stan.sd.dist,y=mean,color = survey),size=0.25) + facet_wrap(~species+year_era)+ theme_few() +  
+#    ylab("Random Field ") + xlab("Deviation from standard deviation") + scale_color_manual(values = cols) 
+# save_plot(paste0(direct.proj,"Results/Figures/RF_vs_deviation(sd).png"),rf.vs.dev.sd,base_width =11,base_height =8,units='in')
+# # Now gonna look at RF vs the prediction SD...
+# rf.vs.pred.sd <- ggplot(pred.and.rf.fields) + geom_point(aes(x=pred.sd,y=mean,color = survey),size=0.25) + facet_wrap(~species+year_era)+ theme_few() +  
+#    ylab("Random Field ") + xlab("Prediction standard deviation") + scale_color_manual(values = cols) 
+# save_plot(paste0(direct.proj,"Results/Figures/RF_vs_SD(Pred).png"),rf.vs.pred.sd,base_width =11,base_height =8,units='in')
+
+# Looking at our metric spatially, seems like it is reasonable enough to move forward. 
+# hgt <- unit(5,'cm')
+# brk <- seq(-0.6,1.7,by=0.2)
+# lims <- range(brk)
+# col <- addalpha(pals::viridis(101),1)
+# sf <- scale_fill_gradientn(colours = col, limits=lims,breaks=brk,name=paste0(en2fr("Deviation from sd",french,case='sentence',custom = rosetta_terms)))
+# sc <- scale_colour_gradientn(colours = col, limits=lims,breaks=brk,name=paste0(en2fr("Deviation from sd",french,case='sentence',custom = rosetta_terms)))
+# 
+# tst <- pred.res %>% dplyr::filter(survey == "Spring",species == "Cod")
+# summary(tst$stan.sd.dist)
+#                                   
+# plt.dev.sd.tst <- bp + geom_sf(data = pred.res %>% dplyr::filter(survey == "Spring",species == "Cod")  ,aes(fill = stan.sd.dist,colour=stan.sd.dist)) +
+# facet_wrap(~yrs,ncol=6) +
+#   coord_sf(datum=32619) + sf + sc  +# theme_map() +
+#  theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+#  save_plot(paste0(direct.proj,"Results/Figures/deviation_spatial_plot.png"),plt.dev.sd.tst,base_width =15,base_height =8,units='in')
+#  
+```
+
+
+```{r intersect-pe-and-sd-closures, echo=F, include=F,cache=T}
+# So the primary story has to be changes in EP/core area within the closures.  But we could add a secondary indicator story using the SDs, an sd of the standardized SD's if 
+# you will, while the numbers are meaningless, you wouldn't want to see this number increasing over time and you could look spatially at large closures to see where you have
+# less certainty, if this happens to be an area that you are particularly interested in you probably should invest money in these areas to improve your knowledge.  Need to understand any relationship between estimate and standard deviation when doing this of course.
+
+# Now get the area in total for Canada and the US, not sure I'll need them...
+us.grid <- st_difference(mesh.grid,eez.can)
+can.grid <- st_intersection(mesh.grid,eez.can)
+can.area <- st_area(can.grid) %>% set_units("km^2") %>% dplyr::as_tibble() %>% dplyr::summarise(area = sum(value))
+us.area <- st_area(us.grid) %>% set_units("km^2") %>% dplyr::as_tibble() %>% dplyr::summarise(area = sum(value))
+# I think here I'm going to want to loop through each closure
+# Stitch together all the closed area objects into one list
+areas <- list(`Groundfish closure` = can.grid,
+              `Closed Area 1` = CA1,
+              `Closed Area 2` = CA2,
+              `Yellowtail closure` = yt.closures,
+              `Cod closure` = cod.closures,
+              Canada =  can.grid,
+              US = us.grid,
+              `Georges Bank` = mesh.grid)
+n.areas <- length(areas)
+
+#Here's our workhorse, from the dashboard with modifications for SD....
+
+surveys <-   unique(pred.res$survey)
+n.surveys <- length(surveys)
+specs <- unique(pred.res$species)
+n.specs <- length(specs)
+
+#cls.prob <- NULL    
+#cls.sd <- NULL
+#clos.sd.summary <- NULL
+#clos.area.summary <- NULL
+area.summary <- NULL
+sd.summary <- NULL
+for(i in 1:n.surveys)
+{
+  for(j in 1:n.specs)
+  {
+    
+    surv <- surveys[i]
+    spec <- specs[j]
+    pred.sub <- pred.res %>% dplyr::filter(survey == surv,species == spec)
+    # Going to reorder this by year, just a bit cleaner when looking at data later....
+    pred.sub <- pred.sub[order(pred.sub$yrs),]
+    
+    # So this object is the preds filtered to the value we want to pick as our core area value...
+    preds.prob <- pred.sub %>% dplyr::filter(pred >= hi.prob)
+    
+    for(k in 1:n.areas)
+    {
+      # First we subset the data as necessary, then we "fill' up the data so we have information every year, even if
+      # that information is redundant information (i.e. the RF hasn't changed).
+      nm <-  names(areas)[k]
+      area <- areas[[k]]
+      if(nm %in% c("Groundfish closure","Canada","US","Georges Bank"))
+      {
+        area <- st_cast(area,"POINT")
+        area <- concaveman(area) 
+      } # end concaveman-ism
+      
+      # Pick this for each loop through the k's as I need to overwrite it for the closures...
+      all.years <- data.frame(yrs = unique(pred.sub$yrs)) 
+      first.years <- as.numeric(substr(all.years$yrs,1,4))
+      # Now get the two subsets I'm interested in.
+      if(!nm %in% c("Yellowtail closure","Cod closure")) 
+      {
+        prob.tmp <- st_intersection(preds.prob,area)
+        sds.tmp <- st_intersection(pred.sub,area)
+        
+        if(spec == "Cod")
+        {
+          # So this gets the
+          if(surv == "Winter") 
+          {
+            prob.first <-   prob.tmp %>% dplyr::filter(yrs == "1987-89") 
+            prob.tmp   <-   prob.tmp %>% dplyr::filter(yrs != "1987-89")
+            sds.first  <-   sds.tmp %>% dplyr::filter(yrs == "1987-89") 
+            sds.tmp    <-   sds.tmp %>% dplyr::filter(yrs != "1987-89")
+          } # end if surv == "winter" statement
+          
+          tmp <- NULL
+          tmp2 <- NULL
+          tmp.sd <- NULL
+          tmp2.sd <- NULL
+          
+          for(p in 0:4) 
+          {
+            tmp[[p+1]] <- prob.tmp %>% dplyr::mutate(year = as.numeric(first_year) + p)
+            tmp.sd[[p+1]] <- sds.tmp %>% dplyr::mutate(year = as.numeric(first_year) + p)
+            if(surv == "Winter" & p < 3)
+            {
+              tmp2[[p+1]] <- prob.first %>% dplyr::mutate(year = as.numeric(first_year) + p) # Only needed for the Winter survey
+              tmp2.sd[[p+1]] <- sds.first %>% dplyr::mutate(year = as.numeric(first_year) + p) # Only needed for the Winter survey
+            } # end if(surv == "Winter" & p < 3)
+          } # end for p loop
+          
+          # Unwrap objects...
+          prob <- do.call('rbind',tmp)
+          sds <- do.call('rbind',tmp.sd)
+          if(surv == "Winter")
+          {
+            tmp2 <- do.call('rbind',tmp2)
+            tmp2.sd <- do.call('rbind',tmp2.sd)
+            prob <- bind_rows(tmp2,prob) # Only needed for the Winter survey
+            sds <- bind_rows(tmp2.sd,sds)
+          } # end if(surv == "Winter")
+          prob$area <- prob %>% st_area() %>% set_units("km^2") # recalculate area based on polygons...
+
+        } # end if(spec == "Cod")
+        
+        
+        # Now do the same thing for Yellowtail...
+        if(spec == "Yellowtail")
+        {
+           # This won't work for years in which the random field isn't 3 years, i.e. the first year in the yellowtail in spring. Winter and Fall happen to be fine for YT :-)
+          if(surv == "Spring")
+          {
+            prob.first <-   prob.tmp %>% dplyr::filter(yrs == "1970-71") 
+            prob.tmp   <-   prob.tmp %>% dplyr::filter(yrs != "1970-71")
+            sds.first  <-   sds.tmp %>% dplyr::filter(yrs == "1970-71") 
+            sds.tmp    <-   sds.tmp %>% dplyr::filter(yrs != "1970-71")
+          } # End surv == spring
+          
+          tmp <- NULL
+          tmp2 <- NULL
+          tmp.sd <- NULL
+          tmp2.sd <- NULL
+          ####For the fall we have a 5 year loop, and all era's are 5 years long so easy peasy...
+          if(surv == "Fall") 
+          {
+            for(p in 0:4) 
+            {
+              tmp[[p+1]] <- prob.tmp %>% dplyr::mutate(year = as.numeric(first_year) + p)
+              tmp.sd[[p+1]] <- sds.tmp %>% dplyr::mutate(year = as.numeric(first_year) + p)
+            } #end for loop
+          } # end if fall statement
+          
+          # For the Winter and Spring surveys we have a 3 year field...
+          if(surv != "Fall") 
+          {  
+            for(p in 0:2)
+            {
+              tmp[[p+1]] <- prob.tmp %>% dplyr::mutate(year = as.numeric(first_year) + p)
+              tmp.sd[[p+1]] <- sds.tmp %>% dplyr::mutate(year = as.numeric(first_year) + p)
+              if(surv == "Spring" & p < 2)
+              {
+                tmp2[[p+1]] <- prob.first %>% dplyr::mutate(year = as.numeric(first_year) + p) # Only needed for the Spring survey
+                tmp2.sd[[p+1]] <- sds.first %>% dplyr::mutate(year = as.numeric(first_year) + p) # Only needed for the Spring survey
+              }  
+            } # end p loop
+          } # end surv fall statement
+          # Unwrap and combine lists
+          prob <- do.call('rbind',tmp)
+          sds <- do.call('rbind',tmp.sd)
+          if(surv == "Spring")
+          {
+            tmp2 <- do.call('rbind',tmp2)
+            tmp2.sd <- do.call('rbind',tmp2.sd)
+            prob <- bind_rows(tmp2,prob) 
+            sds <- bind_rows(tmp2.sd,sds)
+          } # End spring
+          prob$area <- prob %>% st_area() %>% set_units("km^2") # recalculate area based on polygons...
+      } # end if(spec == "Yellowtail")
+      } # end if statement handling the areas that aren't the cod and yt closures.
+      
+      # Now to the Cod and Yellowtail closures
+      if(nm %in% c("Cod closure","Yellowtail closure"))
+      {
+        tmp <- NULL
+        tmp.sd <- NULL
+        for(p in 1:nrow(area))
+        {
+          year.to.pick <- first.years[max(which(first.years <= area$year[p]))]
+          tmp.yrs <- (pred.sub %>% dplyr::filter(first_year == year.to.pick) %>% dplyr::select(yrs))$yrs[1]
+          tmp[[p]] <- st_intersection(preds.prob %>% dplyr::filter(first_year == year.to.pick),area %>% dplyr::filter(year ==area$year[p]))
+          tmp.sd[[p]] <- st_intersection(pred.sub %>% dplyr::filter(first_year == year.to.pick),area %>% dplyr::filter(year ==area$year[p]))
+          # If there is no data I still want to create the object so we have data for the year/area combo...
+          if(nrow(tmp[[p]]) ==0) 
+          {
+            tmp[[p]] <- tmp.sd[[p]][1,] # Just grab the first row from tmp.sd as we know we'll have data there, then delete the data and fill it with NAs....
+            tmp[[p]][names(tmp[[p]]) %in% names(tmp[[p]])] <- NA
+            # A FAKE polygon that is nowhere near anywhere...
+            st_geometry(tmp[[p]]) <- st_sfc(st_polygon(list(matrix(c(0,0,0.1,0,0.1,0.1,0,0.1,0,0),ncol=2, byrow=TRUE))),crs=st_crs(preds.prob)) 
+            tmp[[p]]$survey <- surv
+            tmp[[p]]$species <- spec
+            tmp[[p]]$yrs <- tmp.yrs
+          } # end if statement
+          tmp[[p]]$year <- tmp.sd[[p]][1,]$year.1
+          tmp.sd[[p]]$year <- tmp.sd[[p]]$year.1
+        } # end for p loop
+        prob <- do.call('rbind',tmp)
+        sds <- do.call('rbind',tmp.sd)
+        # Clean up
+        prob <- prob %>% dplyr::select(!c("Group_1","Document","year.1","StartDay","StartMonth","LastDay","LastMonth","PID","Species"))
+        prob$area <- prob %>% st_area() %>% set_units("km^2")
+        sds <- sds %>% dplyr::select(!c("Group_1","Document","year.1","StartDay","StartMonth","LastDay","LastMonth","PID","Species"))
+        #all.years <- data.frame(yrs = unique(sds$yrs)) 
+        #first.years <- as.numeric(substr(all.years$yrs,1,4))
+      } # end  if(names(areas[k]) %in% c("Cod closure","Yellowtail closure"))
+      
+      # Now stitch everything back together again..
+       # First summarize the SD data
+      tmp.sd <- sds %>% data.frame() %>% dplyr::group_by(year,yrs,.drop=F) %>%  dplyr::summarize(mn.stan.sd.dist = mean(stan.sd.dist),
+                                                                                                 med.stan.sd.dist = median(stan.sd.dist),
+                                                                                                 mn.sd.dist = mean(sd.dist),
+                                                                                                 med.sd.dist = median(sd.dist),
+                                                                                                 mn.pred = mean(pred),
+                                                                                                 med.pred = median(pred),
+                                                                                                 mn.sd = mean(pred.sd),
+                                                                                                 med.sd = median(pred.sd))
+      tmp.sd$loc <- nm
+      tmp.sd$species <- spec
+      tmp.sd$survey <- surv
+      sd.summary[[paste(surv,spec,nm,sep="_")]]  <- tmp.sd
+      
+      # Now the area calcs
+      tmp.area <- prob  %>% dplyr::group_by(year,yrs) %>% dplyr::summarize(tot.area = sum(area))
+      st_geometry(tmp.area) <- NULL # Strip out the geometry...
+      # If there are 0's in the data when we want to have data we are going to have to fill those with 0's now....
+      if(!nm %in% c("Cod closure","Yellowtail closure")) # But this has been done for the cod/yt closures, it's the other areas we need to do something fun.
+      {
+        year.range <- data.frame(year = seq(min(tmp.sd$year),max(tmp.sd$year),by=1))
+        tmp.area <- left_join(year.range,tmp.area,by='year')
+        tmp.area$tot.area[is.na(tmp.area$tot.area)] <- 0
+        tmp.area$yrs <- tmp.sd$yrs
+      }
+      tmp.area <- tmp.area[order(tmp.area$year),]
+      
+      tmp.area$loc <- nm
+      tmp.area$species <- spec
+      tmp.area$survey <- surv
+      area.summary[[paste(surv,spec,nm,sep="_")]]  <- tmp.area
+     
+  } # end for(k in 1:n.areas)
+    }} # End i, j loops
+    
+  
+  
+  
+# Unwrap the sd and area lists into tidy dataframes.
+sd.all <- do.call('rbind',sd.summary)
+area.all <- do.call('rbind',area.summary)
+# Make very small values go to 0...
+area.all$tot.area <- as.numeric(area.all$tot.area) # Strip off the km^2 from the total area
+area.all$tot.area[area.all$tot.area < 0.1] <- 0 # and make anything less that 0.1 km^2 = 0 (mostly effects Cod and YT closure hack I did)
+# Would be nice to get a 'proportion of closure that is core area.  So we need to stick the size of the areas onto the area.all object
+area.all$clos.size <- NA
+for(i in 1:n.areas)
+{
+  nm <-names(areas)[i]
+  #tmp <- area.all %>% dplyr::filter(loc == names(areas)[i])
+  # Now that's ugly!
+  if(!nm %in% c("Cod closure","Yellowtail closure"))
+  {
+  clos.size <- areas[[i]] %>% st_area() %>% set_units("km^2") %>% 
+                                  as.numeric() %>% as.data.frame() %>% dplyr::summarize(sum = sum(.)) %>% as.numeric()
+  area.all$clos.size[area.all$loc == nm] <- clos.size
+  }# End the static closures
+
+  # Now the dynamic closures need another annual loop annoyingly...
+  if(nm %in% c("Cod closure","Yellowtail closure"))
+  {
+    years <- unique(tmp$year)
+    n.years <- length(years)
+    for(j in years)
+    {
+      clos.size <- areas[[i]] %>% dplyr::filter(year == j) %>% st_area() %>% set_units("km^2") %>% as.numeric() 
+      area.all$clos.size[area.all$loc == nm & area.all$year == j] <- clos.size
+    } # End loop through the years...
+  }# end the dynamic closures...
+  
+}# End the i loop to get areas on all the closures...
+
+# Now calculate the proportion of closed area that is 'Core".
+area.all <- area.all %>% dplyr::mutate(prop = tot.area/clos.size)
+area.all$loc[area.all$loc == "Closed Area 2"] <- "Closed Area II"
+sd.all$loc[sd.all$loc == "Closed Area 2"] <- "Closed Area II"
+area.all$loc[area.all$loc == "Closed Area 1"] <- "Closed Area I"
+sd.all$loc[sd.all$loc == "Closed Area 1"] <- "Closed Area I"
+
+# And here we'll split the object into the closures and the larger regional summaries
+area.regions <- area.all %>% dplyr::filter(loc %in% c("Canada","US", "Georges Bank"))
+area.closures <- area.all %>% dplyr::filter(loc %in% c("Closed Area I","Closed Area II","Groundfish closure","Cod closure","Yellowtail closure"))
+area.closures$loc <-  factor(area.closures$loc,levels = c("Closed Area I","Closed Area II","Groundfish closure","Cod closure","Yellowtail closure"))
+sd.regions <- sd.all %>% dplyr::filter(loc %in% c("Canada","US", "Georges Bank"))
+sd.closures <- sd.all %>% dplyr::filter(loc %in% c("Closed Area I","Closed Area II","Groundfish closure","Cod closure","Yellowtail closure"))
+sd.closures$loc <-  factor(sd.closures$loc,levels = c("Closed Area I","Closed Area II","Groundfish closure","Cod closure","Yellowtail closure"))
+
+#save(list = c("sd.all","area.all"),file = paste0(direct.proj,"Results/Core_area_and_SD_calcs.RData"))
+#load(paste0(direct.proj,"Results/Core_area_and_SD_calcs.RData"))
+
+# Colors of the survey
+surv.cols <- c("black", "blue","darkgreen")
+# The CAI and CAII dates are December 1994 as per Murawski 2000 paper, the Groundfish closure was first put in place in 1970 as per Halliday 1988
+strt.years <- data.frame(year = c(rep(1994,4),rep(1970,2),rep(2006,2),rep(2007,2)),
+                         loc = c(rep("Closed Area I",2),rep("Closed Area II",2),rep("Groundfish closure",2),rep("Cod closure",2),rep("Yellowtail closure",2)))
+strt.years$loc <-  factor(strt.years$loc,levels = c("Closed Area I","Closed Area II","Groundfish closure","Cod closure","Yellowtail closure"))
+
+# So the plots of the Area time series...
+plt.core.area <- ggplot(area.closures) + 
+                           geom_line(aes(y = tot.area, x= year,color=survey),size=1)  + facet_wrap(~loc + species,scales = 'free_y',ncol=2) +
+                           geom_line(aes(y =clos.size ,x=year),size=0.5,linetype ='dashed') +
+                           geom_vline(data=strt.years,aes(xintercept = year),col='grey',linetype='dotted',size=1) +
+                           scale_color_manual(values = surv.cols) + scale_x_continuous(name ="",breaks=seq(1970,2020,by=5)) +
+                           theme(legend.title = element_blank()) + ylab("Core area (km²) in Closure")
+
+save_plot(paste0(direct.proj,"Results/Figures/Core_area_closure.png"),plt.core.area,base_width =11,base_height =11,units='in')
+# Plot of the proportion of core area in each closure over time
+plt.prop.core <- ggplot(area.closures) + 
+                           geom_line(aes(y = prop, x= year,color=survey),size=1)  + facet_wrap(~loc + species,ncol=2) + scale_y_continuous(limits = c(0,1.01)) +
+                           geom_vline(data=strt.years,aes(xintercept = year),col='grey',linetype='dotted',size=1) +
+                           scale_color_manual(values = surv.cols) + scale_x_continuous(name ="",breaks=seq(1970,2020,by=5)) +
+                           theme(legend.title = element_blank()) + ylab("Proportion of Closure that is Core Area")
+
+save_plot(paste0(direct.proj,"Results/Figures/Core_prop_closure.png"),plt.prop.core,base_width =11,base_height =11,units='in')
+# Plot of the mean EP changes in each closure over time.
+plt.pred <- ggplot(sd.closures) + 
+                           geom_line(aes(y = mn.pred, x= year,color=survey),size=1)  + facet_wrap(~loc + species,ncol=2) + scale_y_continuous(limits = c(0,1)) +
+                           geom_vline(data=strt.years,aes(xintercept = year),col='grey',linetype='dotted',size=1) + 
+                           scale_color_manual(values = surv.cols) + scale_x_continuous(name ="",breaks=seq(1970,2020,by=5)) +
+                           theme(legend.title = element_blank()) + ylab("Mean Encounter Probability (EP)")
+
+save_plot(paste0(direct.proj,"Results/Figures/EP_closure.png"),plt.pred,base_width =11,base_height =11,units='in')
+
+
+sd.range.stan.dist <- range(sd.closures$mn.stan.sd.dist)        
+plt.stan.sd.dist <- ggplot(sd.closures) + 
+                           geom_line(aes(y = mn.stan.sd.dist, x= year,color=survey),size=1)  + facet_wrap(~loc + species,ncol=2)  +
+                           scale_y_continuous(limits = c(min(sd.range.stan.dist),max(sd.range.stan.dist))) +
+                           geom_vline(data=strt.years,aes(xintercept = year),col='grey',linetype='dotted',size=1) +                         
+                           geom_hline(yintercept = 0,col='grey',size=0.5,linetype = 'dashed') +
+                           scale_color_manual(values = surv.cols) + scale_x_continuous(name ="",breaks=seq(1970,2020,by=5)) +
+                           theme(legend.title = element_blank()) + ylab("Standardized Mean SD distance")
+save_plot(paste0(direct.proj,"Results/Figures/stan_sd_dist_closure.png"),plt.stan.sd.dist,base_width =11,base_height =11,units='in')
+
+
+
+sd.range.dist <- range(sd.closures$mn.sd.dist)    
+plt.sd.dist <- ggplot(sd.closures) + 
+                           geom_line(aes(y = mn.sd.dist, x= year,color=survey),size=1)  + facet_wrap(~loc + species,ncol=2) +
+                           scale_y_continuous(limits = c(min(sd.range.dist),max(sd.range.dist))) +
+                           geom_vline(data=strt.years,aes(xintercept = year),col='grey',linetype='dotted',size=1) +                         
+                           geom_hline(yintercept = 0,col='grey',size=0.5,linetype = 'dashed') +
+                           scale_color_manual(values = surv.cols) + scale_x_continuous(name ="",breaks=seq(1970,2020,by=5)) +
+                           theme(legend.title = element_blank()) + ylab("Mean SD distance")
+save_plot(paste0(direct.proj,"Results/Figures/sd_dist_closure.png"),plt.sd.dist,base_width =11,base_height =11,units='in')
+
+
+sd.range <- range(sd.closures$mn.sd)
+plt.sd <- ggplot(sd.closures) + 
+                           geom_line(aes(y =mn.sd, x= year,color=survey),size=1)  +  facet_wrap(~loc + species,ncol=2) + 
+                           geom_vline(data=strt.years,aes(xintercept = year),col='grey',linetype='dotted',size=1) +
+                           scale_y_continuous(limits = c(min(sd.range),max(sd.range))) +
+                           scale_color_manual(values = surv.cols) + scale_x_continuous(name ="",breaks=seq(1970,2020,by=5)) +
+                           theme(legend.title = element_blank()) + ylab("Mean Standard Deviation")
+save_plot(paste0(direct.proj,"Results/Figures/sd_closure.png"),plt.sd,base_width =11,base_height =11,units='in')
+
+# These plots should stick with using all the data...
+plt.pred.sd <- ggplot(pred.res) + geom_point(aes(y= pred,x=pred.sd,color = survey)) 
+plot.pred.sd.dist <-  ggplot(sd.all) + geom_point(aes(y= mn.pred,x=mn.sd.dist,color=survey))
+
+
+
+      # here would be a sample plot for CA1 with the sd data...
+
+# Looking at our metric spatially, seems like it is reasonable enough to move forward. 
+hgt <- unit(5,'cm')
+brk <- seq(-0.2,0.4,by=0.05)
+lims <- range(brk)
+col <- addalpha(pals::viridis(101),1)
+sf <- scale_fill_gradientn(colours = col, limits=lims,breaks=brk,name=paste0(en2fr("Deviation from sd",french,case='sentence',custom = rosetta_terms)))
+sc <- scale_colour_gradientn(colours = col, limits=lims,breaks=brk,name=paste0(en2fr("Deviation from sd",french,case='sentence',custom = rosetta_terms)))
+
+bp.gb <- pecjector(area="GB",plot=F,repo = 'github',
+           add_layer = list(land ='grey',eez = 'eez',nafo = 'main',scale.bar = 'tl'),
+           add_custom= list(obj = CA1),
+           c_sys = 32619,buffer = 0.2) + theme_map()
+
+
+plt.dev.sd.tst <- bp.gb + geom_sf(data = cls.sub  ,aes(fill = stan.sd.dist,colour=stan.sd.dist)) +
+facet_wrap(~yrs,ncol=6) +
+  coord_sf(datum=32619) + sf + sc  +# theme_map() +
+ theme(legend.key.width =hgt,text = element_text(size=16), legend.position="top")
+      
+      
+      
+
+      
+      
+    
+   
+  
+  
+    
+
+    
+ 
+ ```
+ 
+
+
+```{r overveiw-fig, echo=F, include=F, cache =T}
+################################
+###  Figures for the paper  ###
+################################
+
+# Plane old map
+bp <-  pecjector(area="GOM",plot=F,repo = 'github',add_layer = list(land ='grey',eez = 'eez',nafo = 'main',scale.bar = 'tl'),c_sys = 32619,buffer = 0.2) + theme_map()
+
+# Lets get a basemap set up for the rest of the show.
+bp.zoom <- pecjector(c_sys = 32619,area = list(x=c(580000,780000), y = c(4530000,4680000),crs = 32619),add_layer = list(land='grey',eez = 'eez',nafo = 'main',scale.bar = 'tl'),plot=F) #+ theme_map()
+
+# Same but with bathy underlain
+bp.bathy <-  pecjector(area="GOM",plot=F,repo = 'github',add_layer = list(land ='grey',eez = 'eez',nafo = 'main',scale.bar = 'tl',bathy = c(10,'s',200)),c_sys = 32619,buffer = 0.2) + theme_map()
+
+
+# Maybe I want this sometime.
+# bp.closures <- bp.bathy + geom_sf(data= CA1,fill = NA,color = 'red',size=1) + 
+#                           geom_sf(data= CA2,fill = NA,color = 'green',size=1) +
+#                           geom_sf(data= yt.closures, fill= NA,color = 'blue',size=1) + 
+#                           geom_sf(data=cod.closures, fill= NA,color = 'black',size=1) 
+# A figure providing a general overview of the area....
+
+# #  A nice clean polygon of the core of the GB area we want to deal with here.
+ clp.poly <- st_as_sf(data.frame(X = c(508000,508000,900000,650000,600000,550000),
+                                 Y=c(4540000,4350000,4674000,4674000,4661000,4622000),ID=1),coords = c("X","Y"),crs= 32619)
+ clp.poly <- st_cast(st_combine(clp.poly),"POLYGON")
+# # Now use the bigger clp with this other clip to get a nice clipped GB area...
+ clp.pred <- st_intersection(clp,clp.poly)
+
+#####
+# Figure Overview of the area, don't need to run this every time, if I want to change something uncomment the below
+#####
+labs <- st_as_sf(data.frame(X =c(600000, 680000), Y = c(4700000,4700000),lab = c("U.S.","Canada")),coords = c("X","Y"),crs=32619)
+ 
+plt.over <- bp.bathy + geom_sf(data = clp.pred,fill=NA,size = 1.5, color='orange') + 
+                       geom_sf(data= dat.sf,alpha = 0.25,shape=19,size=0.25, fill='black',color='black')+
+                       #geom_sf(data = CA1,fill = NA,size=1.25,color='blue') + geom_sf(data = CA2,fill = NA,size=1.25,color = 'white') + 
+                       #geom_sf(data = yt.closures,size=0.5,fill = 'lightgrey', alpha = 0.1,color = 'gold') + 
+                       #geom_sf(data = cod.closures,size=0.5,fill = 'lightgrey', alpha = 0.1,color = 'gold') + 
+                       geom_sf_label(data = labs,aes(label = lab),parse=T)  
+   
+ 
+save_plot(paste0(direct.proj,"Results/Figures/GB_overview.png"),plt.over,base_width =6,base_height =8,units='in',dpi=300)
+save_plot(paste0(direct.proj,"Results/Figures/GB_overview.tiff"),plt.over,base_width =6,base_height =8,units='in',dpi=300)
+#over.plt <- paste0(direct.proj,"Results/Figures/GB_overview.png")
+```
+
+
+```{r mesh-plt, echo=F, include=F, paged.print=FALSE,cache =T}
+
+#####
+# Figure MESH don't need to run this every time, if I want to change something uncomment the below
+#####
+
+# I'm gonna need to plot my mesh on the nice bp object
+mesh.gf$crs <- crs("+init=epsg:32619") 
+# THis is a very minor tweak on a custom function from Finn Lindgren https://groups.google.com/forum/#!topic/r-inla-discussion-group/z1n1exlZrKM
+mesh.sf <- inla.mesh2sf(mesh.gf)
+
+plt.mesh <- pecjector(area = "GOM",buffer=0.4, c_sys = 32619,plot=F,
+                     add_layer = list(land ='grey',eez = 'eez',nafo = 'main',scale.bar = 'tl'),
+                     add_custom = list(obj = mesh.sf$triangles, size=0.5,color= 'grey30')) +
+                     theme_map()
+save_plot(paste0(direct.proj,"Results/Figures/mesh.tiff"),plt.mesh,base_width =8,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/mesh.png"),plt.mesh,base_width =8,base_height =8,units='in')
+#mesh.plt <- paste0(direct.proj,"Results/Figures/mesh.png")
+```
+
+```{r mesh-grid-plt, echo=F, include=F, paged.print=FALSE,cache=T}
+####
+# Figure for the mesh grid
+#####
+plt.mesh.grid <- pecjector(area = list(x=c(540000,780000), y = c(4500000,4680000),crs = 32619),buffer=0.4, c_sys = 32619,plot=F,
+                     add_layer = list(land ='grey',eez = 'eez',nafo = 'main',scale.bar = 'tl',bathy = c(50,'s')),
+                     add_custom = list(obj = mesh.grid, size=0.5,color= 'grey30')) +
+                     theme_map()
+save_plot(paste0(direct.proj,"Results/Figures/mesh_grid.tiff"),plt.mesh.grid,base_width =8,base_height =8,units='in')
+save_plot(paste0(direct.proj,"Results/Figures/mesh.grid.png"),plt.mesh.grid,base_width =8,base_height =8,units='in')
+
+```
+
+```{r ,figs-load, echo=F, include=F, paged.print=FALSE,cache =T}
+# Here we load the figures we need for later, saves lots of running above if nothing has changed...
+over.plt <- paste0(direct.proj,"Results/Figures/GB_overview.png") # Overview plot
+mesh.plt <- paste0(direct.proj,"Results/Figures/mesh.png") # Mesh plot
+mesh.grid.plt <- paste0(direct.proj,"Results/Figures/mesh.grid.png")
+
+
+
+```
+
+```{r inline-data-for-paper, echo=F, include=F, paged.print=FALSE,cache =F}
+
+################################
+###  Getting data for use in the paper  ###
+################################
+n.stations <- dat.final %>% group_by(survey) %>% dplyr::summarise(ns = n())
+n.nmfs.spring <- n.stations$ns[n.stations$survey == 'nmfs-spring']
+n.rv <- n.stations$ns[n.stations$survey == 'RV']
+n.nmfs.fall <- n.stations$ns[n.stations$survey == 'nmfs-fall']
+
+# What size are the mesh grid cells
+mesh.grid.size <- st_area(mesh.grid) %>% set_units("km^2") %>% as.numeric() %>% mean() %>% round(digits=1)
+
+# Sediment type overall...
+sed.bd <- table(dat.final$SEDNUM)
+per.3.4.sed <- signif(100*sum(sed.bd[2:3])/length(dat.final$SEDNUM), digits = 2)
+# Other sediment types are 5.7% of tows, along with a small number of NA tows (which table doesn't show).
+per.other.sed <- signif(100*sum(sed.bd[-c(2:3)])/length(dat.final$SEDNUM), digits = 2)
+# Get some of the cod FE numbers... hard to pick a number here give variabilty but save to say looking at these the drop occurs between 10 and 11 °C
+wt.cod <- cod.fe.res %>% dplyr::filter(survey == "Winter" & fe == "SST") 
+st.cod <- cod.fe.res %>% dplyr::filter(survey == "Spring" & fe == "SST") 
+ft.cod <- cod.fe.res %>% dplyr::filter(survey == "Fall" & fe == "SST") 
+
+peaks <- aggregate(response ~ survey + fe,data = cod.fe.res, FUN = function(x) which(x == max(x)))
+wd.cod <- cod.fe.res %>% dplyr::filter(survey == "Winter" & fe == "Depth") 
+sd.cod <- cod.fe.res %>% dplyr::filter(survey == "Spring" & fe == "Depth") 
+s.dep.peak <- sd.cod$covar[peaks$response[2]]
+w.dep.peak <- wd.cod$covar[peaks$response[1]]
+c.dep.peak <- paste0(round(s.dep.peak,digits =0),"-",round(w.dep.peak,digits=0))
+
+# For yellowtail pick a peak depth as well
+peaks <- aggregate(response ~ survey + fe,data = yt.fe.res, FUN = function(x) which(x == max(x)))
+wd.yt <- yt.fe.res %>% dplyr::filter(survey == "Winter" & fe == "Depth") 
+sd.yt <- yt.fe.res %>% dplyr::filter(survey == "Spring" & fe == "Depth") 
+fd.yt <- yt.fe.res %>% dplyr::filter(survey == "Fall" & fe == "Depth") 
+s.dep.peak <- as.numeric(sd.yt$covar[peaks$response[2]])
+w.dep.peak <- as.numeric(wd.yt$covar[peaks$response[1]])
+f.dep.peak <- as.numeric(fd.yt$covar[peaks$response[3]])
+# Spring and winter are the deepest so take those..
+yt.dep.peak <- paste0(round(s.dep.peak,digits =0),"-",round(w.dep.peak,digits=0))
+
+# Hyperparamters
+range.winter.cod.est <- hyper.mod.est %>% dplyr::filter(model == "cod.winter" , hyper == "Range for w")
+range.winter.cod.mn <- signif(range.winter.cod.est$mean/1000,digits =3)
+range.winter.cod.lci <- signif(range.winter.cod.est$`0.025quant`/1000,digits =2)
+range.winter.cod.uci <- signif(range.winter.cod.est$`0.975quant`/1000,digits =3)
+range.winter.cod.mn.ci <- paste0(range.winter.cod.mn," (95% CI:",range.winter.cod.lci,"-",range.winter.cod.uci,")")
+
+range.spring.cod.est <- hyper.mod.est %>% dplyr::filter(model == "cod.spring" , hyper == "Range for w")
+range.spring.cod.mn <- signif(range.spring.cod.est$mean/1000,digits =3)
+range.spring.cod.lci <- signif(range.spring.cod.est$`0.025quant`/1000,digits =3)
+range.spring.cod.uci <- signif(range.spring.cod.est$`0.975quant`/1000,digits =3)
+range.spring.cod.mn.ci <- paste0(range.spring.cod.mn," (95% CI:",range.spring.cod.lci,"-",range.spring.cod.uci,")")
+
+range.winter.yt.est <- hyper.mod.est %>% dplyr::filter(model == "yt.winter" , hyper == "Range for w")
+range.winter.yt.mn <- signif(range.winter.yt.est$mean/1000,digits =2)
+range.winter.yt.lci <- signif(range.winter.yt.est$`0.025quant`/1000,digits =2)
+range.winter.yt.uci <- signif(range.winter.yt.est$`0.975quant`/1000,digits =3)
+range.winter.yt.mn.ci <- paste0(range.winter.yt.mn," (95% CI:",range.winter.yt.lci,"-",range.winter.yt.uci,")")
+
+```
+
+<!--chapter:end:analyses-code.Rmd-->
+
+# INTRODUCTION {#ref-intro}
+
+The sustainable management of marine fisheries has been recognized as a critical challenge to address in the 21^st^ century [@cbdAichiBiodiversityTargets2018]. Achieving sustainability goals requires an understanding of complex ecological, socio-economic, and political factors and their interactions [@halpernAchievingTripleBottom2013]. For example, fisheries management regions were often delineated as a result of political or geographic considerations rather than biological or ecological rationale. As a result, defined management areas for a species often either encompass a region in which environmental conditions and life-history traits are highly variable or only include a subset of the population [@cadrinDefiningSpatialStructure2020a]. Both of these scenarios are challenging for traditional assessment techniques that assume closed populations along with homogeneous environments and life-history traits [@hilbornQuantitativeFisheriesStock1992]. 
+
+Accounting for spatially and temporally variable processes has long been recognized as a challenge in fisheries science [@bevertonDynamicsExploitedFish1957; @hilbornQuantitativeFisheriesStock1992; @rickerFurtherNotesFishing1944]. Many traditional fisheries methods that are still operationalized today require assumptions about underlying spatial processes; these assumptions generally result in models that treat stocks as spatially homogeneous entities [@bevertonDynamicsExploitedFish1957; @rickerComputationInterpretationBiological1975; @hilbornQuantitativeFisheriesStock1992]. These simplifications were necessary because of computational and statistical limitations and techniques, such as survey stratification, that were implemented to account for spatial heterogeneity and reduce uncertainty in the indices feeding these models [@smithAnalysisDataBottom1996]. Due in part to the lack of spatial context provided by traditional stock assessments, indices were developed to quantify changes in spatial patterns [e.g. @reuchlin-hugenholtzPotentialSpatialDistribution2015]. These indices are an additional source of information for assessing stock health, and while they describe how distributions (e.g. abundance or biomass) have changed over time they are unable to provide a detailed understanding of the spatial changes in these distributions.
+
+Species distribution models (SDMs) were one of the earliest modeling frameworks developed to better understand how environmental factors influenced the distribution of a population [@grinnellOriginDistributionChestNutBacked1904; @boxPredictingPhysiognomicVegetation1981; @boothBioclimFirstSpecies2014]. These models combine environmental data and species' ecological information to map the occurrence probability (OP; or some measure of abundance) of a species across some land(sea)-scape [@boxPredictingPhysiognomicVegetation1981]. In the marine realm, the influence of SDMs has increased rapidly in recent years; SDMs have been used in the development of Marine Protected Areas (MPAs) and MPA networks, to better understand the distribution of Species at Risk (SAR), and to predict the impact of climate change [@cheungApplicationMacroecologicalTheory2008; @robinsonPushingLimitsMarine2011; @sundbladEcologicalCoherenceMarine2011; @domischSpatiallyExplicitSpecies2019; @mchenryProjectingMarineSpecies2019].
+
+Historically, SDMs often did not explicitly consider temporal changes in the relationship between the environment and the response of the species; these SDMs provided a snapshot in time based on available data [@elithSpeciesDistributionModels2009]. However, more sophisticated SDM frameworks have been developed that allow the underlying relationships to vary in time and space. This has led to dynamic models that better utilize the latent spatio-temporal information contained in the data [@merowDevelopingDynamicMechanistic2011; @thorsonJointDynamicSpecies2016; @martinez-minayaSpeciesDistributionModeling2018]. These new spatio-temporal SDMs were made possible by a number of recent statistical and computational advances such as the implementation of the Laplace approximation (LA), Automatic Differentiation (AD), Stochastic Partial Differential Equations (SPDE), and Gaussian Markov Random Fields (GMRFs) in commonly used programming languages [@kristensenTMBAutomaticDifferentiation2016; @rueBayesianComputingINLA2016; @thorsonGuidanceDecisionsUsing2019]. The complex spatio-temporal analytical problems associated with these advanced SDMs can now be solved in a fraction of the time required by traditional methods.
+
+### Georges Bank
+
+Georges Bank (GB) is home to a wealth of natural resources and for centuries has had some of the most productive fisheries in the world [@backusGeorgesBank1987]. In the 1960s and 1970s numerous countries conducted large unsustainable fisheries in the region, but with the introduction of Exclusive Economic Zones (EEZ) in 1977, control of resource exploitation (e.g. fisheries) fell under the jurisdiction of the United States (U.S.) and Canada [@hallidayNorthAtlanticFishery1996; @andersonHistoryFisheriesManagement1997]. The final demarcation of the Canadian and U.S. territorial waters on GB was implemented with an International Court of Justice (ICJ) decision in 1984. Within three years both countries had independent groundfish surveys covering the entirety of GB at different times of the year.
+
+Historically, substantial groundfish fisheries occurred on GB, including Atlantic Cod (*Gadus morhua*) and Yellowtail Flounder (*Limanda ferruginea*) [@andersonHistoryFisheriesManagement1997]. As observed throughout the northwest Atlantic, the biomass of Atlantic Cod on GB declined significantly in the early 1990s and there has been little evidence for recovery of this stock since this collapse [@andrushchenkoAssessmentEasternGeorges2018]. Between the 1970s and the 1990s, the biomass of Yellowtail Flounder on GB was low, but evidence for a rapid recovery of this stock in the early 2000s resulted in directed fisheries for several years. However, this recovery was short lived and the biomass of this stock has been near historical lows for the last decade [@legaultStockAssessmentGeorges2018].
+
+<!-- Fisheries management bodies in both Canada and the U.S. have implemented measures to protect the Atlantic Cod and Yellowtail Flounder stocks on GB. While these measures vary between the countries, there is a collaborative process to develop a shared quota for these two stocks [@tracTransboundaryResourceAssessment2020]; a quota which has declined substantially for both stocks over the last decade [@andrushchenkoAssessmentEasternGeorges2018; @legaultStockAssessmentGeorges2018]. In addition to regulations that attempt to directly limit fishing mortality, both countries have implemented spatial closures (Figure @ref(fig:Overview)). In the U.S., two large closed areas were implemented (Closed Area I (CA I) and II (CA II)) with the intent of aiding in the recovery of groundfish and invertebrate stocks on GB. These closures were established in 1994 and have been modified over time to occasionally allow some fishing activity [@linkEffectsAreaClosures2005; @murawskiLargescaleClosedAreas2000]. On the Canadian portion of GB, the groundfish fishery has historically been closed from March 1^st^ to May 31^st^ to protect spawning groundfish. In 1994 the closure was expanded to include the months of January and February in an effort to rebuild the Atlantic Haddock stock. This closure was subsequently shortened in 2005 to exclude January, resulting in a closure of the groundfish fishery from February through to the end of May. The Canadian Offshore Scallop Fishery (COSF) also faces restrictions on fishing during the peak groundfish spawning periods with time-area closures limiting the area in which this fishery can operate during February and March [Atlantic Cod; @dfoScallopFisheryArea2019] and June [Yellowtail Flounder; @dfoScallopFisheryArea2014]. The U.S. closures have been linked to the recovery of several stocks on GB [@linkEffectsAreaClosures2005; @murawskiLargescaleClosedAreas2000] although the reasons for the recent decline of Yellowtail Flounder and the ongoing lack of recovery of Atlantic Cod on the bank since the implementation of these closures remains uncertain [@andrushchenkoAssessmentEasternGeorges2018; @legaultStockAssessmentGeorges2018]. In Canada, there had been no comprehensive review of the closures until a recent review by @keithEvaluatingSocioeconomicConservation2020 that found little evidence that the COSF time-area closures were achieving their management objectives. This analysis also highlighted the need for a better understanding of the spatio-temporal distributions of both of these stocks in relation to the location and timing of these closures. -->
+
+Here we use the R-INLA statistical framework [@lindgrenBayesianSpatialModelling2015; @rueBayesianComputingINLA2016; @bakkaSpatialModellingRINLA2018] to develop spatio-temporal SDMs for two depleted groundfish stocks on GB (Atlantic Cod and Yellowtail Flounder). Our objectives were to use data from three groundfish surveys in the region to: 1) develop temporally variable SDMs and explore the influence of a suite of static environmental layers, 2) identify any long-term shifts in the stock distributions, 3) identify any seasonal changes in the stock distributions using available survey data, and 4) use the SDMs to quantify any shifts in core area within Canadian and U.S. waters.
+
+<!-- From a scientific perspective, disentangling how environmental, ecological, and anthropogenic factors impact the population dynamics of marine fishes is pivotal to development of sustainability strategies.  -->
+
+<!-- Species Distribution models (SDMs) have been used for a long time in fisheries.  These models typically try to map spatial patterns in species distribution using available environmental covariates.  Without a detailed knowledge of processes underlying the spatial patterns the use of environmental covariates alone cannot fully account for spatial and temporal variability.  These environmental covariates are typically proxies for more complex unobserved(able)ed processes, and changes in these relationships are difficult to account for in these models. -->
+
+<!-- Recent statistical advances have lead to the development of tools which can be used to develop more realistic SDMs.  These models can account for environmental covariates along with accounting for unexplained spatio-temporal variability.  These kindas of SDMs enable the model to identify the consistent environmental signal (covariates) to be estimated while also providing a statistical framework in which the unexplained spatio-temporal variability can be used to better understand spatio-temporal changes in the species distribution. -->
+
+<!-- Tracking spatio-temporal changes facilitates the development of models which can identify consistent spatial anomalies in which the metric being measures deviates from expectation.  Tracking long-term changes improves our understanding of species shifts and provides insight into how changing environmental conditions impact the strength of the environmental correlations.  This provides a framework for predicting the impact of directed environmental change (e.g. climate change). -->
+
+<!--chapter:end:01-intro.Rmd-->
+
+# Methods {#ref-methods}
+
+
+## Study area
+
+Georges Bank, located in the northwest Atlantic straddling the U.S.-Canada maritime border, is a 3-150 m deep plateau that covers approximately 42,000 km^2^ and is characterized by high primary productivity, and historically high fish abundance [@townsendNitrogenLimitationSecondary1997]. It is an eroding bank with no sediment recharge and covered with coarse gravel and sand that provides habitat for many species [@valentineSeaFloorEnvironment1991]. Since the establishment of the ICJ decision in 1984, the Canadian and U.S. portions of GB have been largely managed separately by the two countries, though some collaborative management exists (Figure \@ref(fig:Overview)).
+
+## Data
+
+Survey data were obtained from the Fisheries and Oceans Canada (DFO) "*Winter*" Research Vessel (RV) survey from 1987-2019 and the National Marine Fisheries Service (NMFS) "*Spring*" and "*Fall*" groundfish surveys from 1972-2019. The *Winter* survey on GB typically occurs in February and early March, the *Spring* survey typically occurs in April and May, while the  *Fall* survey generally takes place between September and November. For all surveys only tows deemed *successful* (Class 1 data) were used in this analysis. This resulted in `r n.rv` tows from the *Winter* survey, `r n.nmfs.spring` tows from the *Spring* survey, and `r n.nmfs.fall` tows from the  *Fall* survey.
+
+## Environmental covariates
+
+A suite of 22 spatial environmental and oceanographic datasets were evaluated (Table \@ref(tab:table-1)). To eliminate redundant variables, Variance Inflation Factors (VIFs) were calculated for all variables and any variables with VIF scores \> 3 were removed. This procedure was repeated until no variables remained with a VIF score \> 3 [@zuurProtocolDataExploration2010]. A Principal Component Analysis (PCA) was undertaken using the data from the associated station locations for each survey with variables excluded from the PCA if they showed no evidence for correlation with other variables or if they had very non-linear correlation patterns (Table \@ref(tab:table-1)). The top 4 PCA components, accounting for at least 80% of the variability in the data for a given survey, were retained and included as covariates for the models in addition to the retained environmental covariates (See Supplemental Figure \@ref(fig:PCA)).
+
+## Statistical Analysis
+
+A Bayesian hierarchical methodology was implemented using the INLA approach available within the R Statistical Programming software R-INLA [@lindgrenBayesianSpatialModelling2015; @bakkaSpatialModellingRINLA2018; @rcoreteamLanguageEnvironmentStatistical2020]. In recent years, R-INLA has seen a rapid increase in use to model species distributions in both the terrestrial and marine realms [e.g. @cosandey-godinApplyingBayesianSpatiotemporal2015; @leachModellingInfluenceBiotic2016; @boudreauConnectivityPersistenceLoss2017]. This methodology solves SPDEs on a spatial triangulated mesh; the mesh is typically based on the available data [@rueBayesianComputingINLA2016]. The mesh used in this study included `r mesh.gf$n` vertices and was extended beyond the boundaries of the data to avoid edge effects (Figure \@ref(fig:Mesh)). Default priors were used for the analysis, except the range and standard deviation hyperparameters (Penalized Complexity (PC) priors) that were used to generate the random fields  [@zuurBeginnerGuideSpatial2017; @fuglstadConstructingPriorsThat2019]. The range PC prior had a median of 50 km with a probability of 0.05 that the range was smaller than 50 km. The standard deviation of the PC prior had a median of 0.5 with a probability of 0.05 that the marginal standard deviation was larger than 0.5.
+
+Survey data up to `r max(dat.final$year)` were used for model development (*Winter* survey from 1987-`r max(dat.final$year)`, *Spring* and *Fall* surveys from 1972-`r max(dat.final$year)`), data from `r max(dat.final$year+1)`-`r max(dat.final$year+3)` were used only as a testing dataset. For all analyses, the response variable was the probability of the survey detecting the stock of interest (Occurrence Probability, $OP_{it}$, where *i* is the individual observation at time *t*) and a *Bernoulli* GLM was utilized within R-INLA. Cells with an estimated OP $\geq$ `r hi.prob` were considered the *core area*. An interactive [dashboard (https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard)](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard) has been developed that can be used to explore the effect of defining different OPs as core area.
+
+$$ OP_{it} \sim Bernoulli(\pi_{it}) $$
+
+\begin{align}
+E(OP_{it}) = \pi_{it} \qquad and \qquad var(OP_{it}) = \pi_{it} \times (1-\pi_{it})
+\end{align}
+
+$$ logit(\pi_{it}) = \alpha + f(Cov_{i}) + u_{it} $$
+
+$$ u_{it} \sim GMRF(0,\Sigma) $$
+
+Each variable retained after the VIF analysis, along with each of the 4 PCA components, was added to the model individually. All continuous covariates were modelled using the INLA random walk $'rw2'$ smoother, which allows for non-linear relationships between the response and each covariate [@zuurBeginnerGuideSpatial2017; @zuurBeginnerGuideSpatial2018]. The continuous covariates were centred at their mean value and scaled by their standard deviation. Covariates that were highly skewed (e.g. depth) were log transformed before being standardized. Due to low sample size of several of the levels the Sediment type [*Sed*; data obtained from @mcmullen2014GISData2014] these infrequent categories were amalgamated into one factor level that was represented by an *Other* term, resulting in three levels for the Sediment covariate (*Other*, *Sand*, and *Gravel-Sand*). Across the three surveys approximately `r per.3.4.sed`% of the survey tows were on the *Sand* or *Gravel-Sand* bottoms and `r 100-per.3.4.sed`% were in the amalgamated *Other* category.
+
+Four spatial random field ($u_{it}$) models with differing temporal components were compared for each stock and each survey, these were a) a static random field (t = 1), b) independent random fields every 10 years, c) independent random fields every 5 years, and d) independent random fields every 3 years. The independent random fields (options b through d)  were set retroactively from the most recent year resulting in a shorter duration random field at the beginning of the time series whenever the field time period was not a multiple of the whole time series length (e.g. the 10 year random fields for the *Spring* models were 2007-2016, 1997-2006, 1987-1996, 1977-1986, and 1972-1976). Models with the same covariate structure but different random fields were compared using WAIC, CPO, and DIC; the results for each of these metrics were similar and only the WAIC results are discussed further. In all cases, the static random field was an inferior model when compared to models with multiple random fields and the results discussed here are largely limited to the comparison of the 10/5/3 year random fields. For brevity we refer to the results from each random field as an *era* (e.g. the core area estimated when using the 2012-2016 random field is the core area during the 2012-2016 era).
+
+### Model Selection Overview
+
+Models were tested using WAIC, CPO, and DIC; the results were similar for each of these diagnostics; only WAIC is discussed further. The model selection results are available in the supplement and the complete results can be found in the Model Output and Model Diagnostics sections of the interactive [dashboard](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard).
+
+Stage 1 model selection for the different covariate models was undertaken using the static random field by adding individual covariates. For this first analysis, covariates were identified if WAIC scores were more than 10 units smaller than the intercept model (e.g. SST for Atlantic Cod in the *Winter*; Figure \@ref(fig:diag-1-fe)) or were found to be low relative to the suite of models tested in multiple seasons (e.g. Dep for Atlantic Cod in the *Spring* and *Fall*; Figure \@ref(fig:diag-1-fe)). For Atlantic Cod, this analysis identified depth (*Dep*) and the average sea surface temperature between 1997 and 2008 (*SST*) as having low WAIC scores in 2 of the 3 surveys [data obtained from @greenlawGeodatabaseHistoricalContemporary2010]. For Yellowtail Flounder, Dep was identified as an informative covariate in all 3 surveys. In addition, Sed, and the average chlorophyll concentration between 1997 and 2008 (*Chl*) were retained based on their low WAIC scores in the  *Fall* survey. Given the low number of informative covariates Dep, SST, and Chl were all retained for both species in Stage 2 of model selection. In Stage 2 of model selection, the variables were added pairwise (e.g. for Atlantic Cod, the models included SST + Dep, Dep + Chl, and SST + Chl) for both stocks and again compared using WAIC with the 10-year random fields. In Stage 3 of covariate model selection, models with 3 covariates were tested based on the Stage 2 results. For Atlantic Cod, a three term model that included additive terms for SST, Dep, and Chl was the most complex model tested. For Yellowtail Flounder, the most complex model included SST, Dep, and Sed. In Stage 3, additional covariates were retained if the WAIC for that model resulted in an improvement of the WAIC of more than 2, as compared to the lowest WAIC for the more parsimonious model.
+
+Model selection on the temporal random fields was done while holding the environmental covariate terms the same.  Initial model selection for the random fields (10 and 5-year fields) was done using the Dep + SST model for both species in all seasons given the general support for the Dep + SST model identified in Stage 2 of covariate model selection. For both species this indicated that the 10-year field was inferior to the more flexible 5-year random fields.  For Atlantic Cod, the 3 and 5-year random fields were compared using the Dep + SST covariates (which was the covariate model with the lowest WAIC). For Yellowtail Flounder, the final step of the random field model selection used the Dep + SST + Sed model (which was the covariate model with the lowest WAIC) for the 3-year and 5-year random field comparison. The key model selection results are provided in the supplement and the full results can be found in the interactive [dashboard](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard). For Atlantic Cod the *final model* chosen included additive Dep and SST covariates and used a random field which changed every 5 years. For Yellowtail Flounder, the final model chosen included additive Dep, SST, and Sed covariates, the *Winter* and *Spring* models used a 3-year random field, while the *Fall* model used a 5-year random field.
+
+## Model Prediction 
+
+A predictive grid on GB was developed with cells having an area of approximately `r mesh.grid.size` km^2^ (See Supplemental Figure \@ref(fig:mesh-grid)). Each cell was intersected with average SST, Dep, and Sed fields (see Supplemental Figure \@ref(fig:SST-Dep-Sed) for the distribution of these environmental covariates) and the OP was estimated for each grid cell in each era for Atlantic Cod and Yellowtail Flounder in the *Winter*, *Spring*, and *Fall* using the final model for each stock and season respectively. The results using the predictive grid were used to calculate the size of the core area (OP $\geq$ `r hi.prob`) for each era.  
+
+The predictive grid was also used to calculate the centre of gravity (COG) of the core area for each era. The COG was calculated in the UTM coordinate system (EPSG Zone: 32619) using the easting (*X*) and northing (*Y*) for each cell identified as core area (*i*) in each era (*t*) and weighted by the OP at each of these locations.
+
+
+\begin{align} 
+x_{t}^{cog} = \frac{\sum_{i=1}^{n} (X_{i,t} \times OP_{i,t})}{\sum_{i=1}^{n}OP_{i,t}} 
+\end{align}
+
+\begin{align}
+y_{t}^{cog} = \frac{\sum_{i=1}^{n} (Y_{i,t} \times OP_{i,t})}{\sum_{i=1}^{n}OP_{i,t}}
+\end{align}
+
+The standard deviation around the mean COG in the X and Y direction was calculated as:
+
+\begin{align}
+\sigma_{cog,t}^{x} = \sqrt{\frac{ \sum_{i=1}^{n}OP_{i,t}} { [(\sum_{i=1}^{n}OP_{i,t})^2 - \sum_{i=1}^{n}OP_{i,t}^2] \times \sum_{i=1}^{n} (OP_{i,t}  \times (X_{i,t} - x_{t}^{cog})^2)}} 
+\end{align}
+
+\begin{align}
+\sigma_{cog,t}^{y} = \sqrt {\frac{ \sum_{i=1}^{n}OP_{i,t}} { [(\sum_{i=1}^{n}OP_{i,t})^2 - \sum_{i=1}^{n}OP_{i,t}^2] \times \sum_{i=1}^{n} (OP_{i,t}  \times (Y_{i,t} - y_{t}^{cog})^2)}} 
+\end{align}
+
+To quantify the ability of these models to predict the location of the stocks in future years, data from the `r max(dat.final$year+1)`-`r max(dat.final$year+3)` surveys were used as a testing dataset to predict the OP in `r max(dat.final$year+1)`, `r max(dat.final$year+2)`, and `r max(dat.final$year+3)`. In addition to the final model, an *Intercept Model* which used only the temporally varying random field for prediction (i.e. the model excluded all environmental covariates) was compared to the predictions from the final models. Both the model residual and the `r max(dat.final$year+1)`-`r max(dat.final$year+3)` predictive error were calculated for each year using Root Mean Squared Error (RMSE), Mean Average Error (MAE), and the standard deviation (SD). Given the similarity of the results only the RMSE is presented (full results are available in the interactive [dashboard](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard)).
+
+## Model Validation
+
+Five fold cross validation was used to compare the out-of-sample predictive performance for a subset of the 5-year random field models: intercept only, SST (Atlantic Cod), Dep (Yellowtail Flounder), and Dep + SST. The Atlantic Cod model validation was performed using the *Winter* survey data, the Yellowtail Flounder validation used the *Spring* survey data. The data were randomly divided into 5 subsets and trained using 4 of the subsets; the 5^th^ dataset was treated as a testing dataset to determine how well the model was able to predict out-of-sample data. Model performance was measured by comparing the model residuals from the training data to the prediction error from the testing data. The metrics used for this comparison were RMSE, MAE, and SD. Given the similarity of the results only the RMSE is presented (full results are available in the interactive [dashboard](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard)). A subset of models were chosen because of the computational demands of this validation procedure. 
+
+<!--chapter:end:02-methods.Rmd-->
+
+# RESULTS {#ref-results}
+
+## Distributional Shifts
+
+For both stocks, the core areas (OP $\geq$ `r hi.prob`) shifted towards the north and east throughout the study period (Figure \@ref(fig:cog-hep)).  For Atlantic Cod, the shift in distribution of the core area occurred relatively rapidly in the 1990s and the centre of gravity (COG) of the core area has remained relatively stable since this period (Figure \@ref(fig:cog-hep)). In the 1970s and 1980s, core area was observed across the bank, however since the mid-1990s there was a clear shift in distribution with core area concentrated in the north-east portion of the bank, mainly in Canadian waters (see Supplemental Figures \@ref(fig:pf-winter-cod) -\@ref(fig:pf-fall-cod)). In addition, in the *Fall*, Atlantic Cod was distributed even further to the northeast along the edge of the study area. The size of the core area followed a similar temporal pattern, with a rapid decline in the core area for Atlantic Cod occurring in the 1990s in the *Winter* and *Spring* (Figure \@ref(fig:area-hep)). The decline in the size of the core area was observed approximately a decade earlier in the *Fall* and the size of the core area was always smaller in the *Fall* (Figure \@ref(fig:area-hep)). The distribution of Atlantic Cod along the edge of the bank during the *Fall* suggests that a substantial portion of this stock may have been located on the slope where survey coverage was limited (Figure \@ref(fig:Overview)).
+
+The Yellowtail Flounder shift in COG (Figure \@ref(fig:cog-hep)), was largely the result of a reduction in the core area in the southwest portion of GB; the majority of core area was located in a central region of GB that straddles the ICJ line dividing Canada and the U.S. (Supplemental Figures \@ref(fig:pf-winter-yt) -\@ref(fig:pf-fall-yt)). The COG of Yellowtail Flounder has slowly been shifting towards the northeast (Figure \@ref(fig:area-hep)). The trends in the size of the core area during the *Spring* and *Fall* have been very similar with rapid declines in the early 1980s followed by an increase in the 1990s and early 2000s (Figure \@ref(fig:area-hep)). The size of the core area in the *Winter* has been in decline since a period of increase in the 1990s (Figure \@ref(fig:area-hep)).
+
+For both stocks, the changes in the size of the core area were more pronounced in the U.S. than in Canadian waters (Figure \@ref(fig:area-can-vs-us-hep)). In the U.S., the declines in the size of core area of Atlantic Cod occurred rapidly in the early 1990s in the *Winter* and *Spring*. In the *Fall*, the loss of core area occurred approximately a decade earlier, although the size of the core area in the U.S. during the *Fall* was always substantially lower than in the *Winter* or *Spring*. In Canadian waters, there has been minimal change in the size of the core area for Atlantic Cod in any of the seasons through time; the size of the core area in the *Fall* has tended to be lower than observed in the *Winter* or *Spring* (Figure \@ref(fig:area-can-vs-us-hep)). For Yellowtail Flounder, the size of the core area in the U.S. declined steadily throughout the 1970s and 1980s, this was followed by an increase in the 1990s and early 2000s (Figure \@ref(fig:area-can-vs-us-hep)). Since the mid-2000s, the size of the core area in the U.S. appeared to stabilize. In Canadian waters, the size of core area for Yellowtail Flounder throughout the 1970s and 1980s was relatively low, slowly increased in the mid-1990s, and has been relatively stable since (Figure \@ref(fig:area-can-vs-us-hep)).
+
+## Environmental Covariates
+
+The spatial fields for the three environmental variables retained by model selection are shown in Supplemental Figure \@ref(fig:SST-Dep-Sed). The average SST between 1997 and 2008 had the largest effect on the OP of Atlantic Cod; they were more likely to be found in regions of the bank with a lower SST (Figure \@ref(fig:cod-fe)). For all 3 surveys, the OP of Atlantic Cod declined rapidly in regions of the bank where the SST was above approximately 10°C (Figure \@ref(fig:cod-fe)). Although depth was also retained in the final Atlantic Cod model, its effect on OP was substantially smaller than the SST effect. During the *Winter* and *Spring*, the OP peaked between `r c.dep.peak` m and declined slowly in shallower and deeper waters (Figure \@ref(fig:cod-fe)). There was no clear relationship with depth in the Winter.
+
+For Yellowtail Flounder, depth had the largest effect on OP, with Yellowtail Flounder most likely to be observed between depths of `r yt.dep.peak` m in each of the 3 surveys and its effect on OP was highest during the *Spring* (Figure \@ref(fig:yt-fe)). The average SST between 1997 and 2008 was also included in the final model, with Yellowtail Flounder OP generally declining as SST increased. The effect of SST was least pronounced in the *Fall*. The sediment type also had a significant influence on the OP for Yellowtail Flounder in the *Winter* and *Fall*, with Sand and Gravel-Sand having higher OPs than the Other sediment category, this difference was most notable during the *Winter* (Figure \@ref(fig:yt-fe) and Supplemental Figure \@ref(fig:diag-3-fe)).
+
+## Model Hyperparameters
+
+The decorrelation range for Atlantic Cod was above 100 km throughout the year and was generally higher than that observed for Yellowtail Flounder (Figure \@ref(fig:hyper-range-var-est)). The range was highest for Atlantic Cod in the *Spring* with an estimate of `r range.spring.cod.mn.ci` km, while the range during the *Winter* spawning period was the lowest at `r range.winter.cod.mn.ci` km. In the *Fall*, the range declined from the *Spring*; this may indicate spatial contraction or fish leaving the study domain (Figure \@ref(fig:hyper-range-var-est)). For Yellowtail Flounder, the lowest range was estimated in the *Winter* at `r range.winter.yt.mn.ci` km with the *Spring* and *Fall* range estimates being higher and somewhat more variable than the *Winter* range estimate. The range estimates of Yellowtail Flounder throughout the year were smaller and less variable than that observed for Atlantic Cod (Figure \@ref(fig:hyper-range-var-est)). The uncertainty of these estimates precludes any statistical differences being observed between the seasons.
+
+The standard deviation of the random field was lower for Atlantic Cod in the *Winter* and *Spring* than during the *Fall* (Figure \@ref(fig:hyper-sd-var-est)), this was indicative of the increased clustering of the stock and the relatively small effect of the environmental covariates in the *Fall*. The standard deviation of the random field was highest for Yellowtail Flounder in the *Winter* and the seasonal differences for Yellowtail Flounder were smaller than those observed with Atlantic Cod (Figure \@ref(fig:hyper-sd-var-est)). The standard deviation of the Yellowtail Flounder field was higher than Atlantic Cod in the *Winter* and *Spring*, but lower in the *Fall* (Figure \@ref(fig:hyper-sd-var-est)). The posteriors of other hyperparameters for both stocks in the *Winter*, *Spring*, and *Fall* are provided in Supplemental Figures \@ref(fig:hyper-cod-winter-post) - \@ref(fig:hyper-yt-fall-post).
+
+## Validation and Prediction
+
+The five fold cross validation indicated that each of the models tested (intercept only, SST (Atlantic Cod), Dep (Yellowtail Flounder), and Dep + SST) were able to predict the distribution for both stocks without an increase in bias or a loss of accuracy (Figure \@ref(fig:folds)). The mean error of the residuals for the validation training set predictions were similar to the error from the predicted test data and while the mean error of the test data was generally more variable, the estimates were centred on 0 and thus there was no evidence of bias in these predictions (Figure \@ref(fig:folds)). The RMSE from the test and training data showed similar patterns for both stocks and most models, although for Yellowtail Flounder the RMSE for both the training and test data from the intercept only model was slightly lower than either of the models with covariates. This indicates that the inclusion of the environmental covariates may result in a small loss of out-of-sample prediction (Figure \@ref(fig:folds)).
+
+The error in the prediction of the distributions of each stock 1, 2, and 3 years into the future were well below the RMSE associated with a model with no predictive ability (dashed line; Figure \@ref(fig:pred-17-19)). The prediction for the models without any environmental covariates were similar to the prediction from the models that included both Dep and SST.  For both stocks, the 2018 data consistently had the lowest prediction accuracy with the models tending to predict individuals where none were observed. This was in agreement with observations of the survey biomass indices being near historic lows for both stocks in 2018 [@legaultStockAssessmentGeorges2018; @andrushchenkoAssessmentEasternGeorges2018]. Generally, the predictive error from these models were near the high end of the range of the annual model residual error, this indicates that these models were able to predict the spatial OP patterns for both stocks up to 3 years into the future without a substantial loss of accuracy, even with environmental covariates excluded from the models (Figure \@ref(fig:pred-17-19)).
+
+<!--chapter:end:03-results.Rmd-->
+
+# DISCUSSION
+
+The SDMs developed here incorporated environmental, spatial, and multi-scale temporal information to partition dynamic changes which occur both inter and intra-annually from static environmental relationships. This framework provided a more complete understanding of the temporal shifts in the stocks' distributions than simpler aggregation based indices that are often used in fisheries science [e.g. @reuchlin-hugenholtzPotentialSpatialDistribution2015; see Supplemental Figure \@ref(fig:gini-index) showing the Gini index timeseries for Yellowtail Flounder and Atlantic Cod on Georges Bank for each survey]. A general shift in the distributions of both stocks towards the east and north was identified.  For both stocks, this shift was in large part due to the loss of core area in the southern and western portion of GB (primarily in U.S. waters). In addition, the analysis of surveys from different times of the year provided a snapshot of the seasonal changes in the distributions of the stocks; the Yellowtail Flounder distribution was relatively stable throughout the year, while Atlantic Cod moved towards the northeastern slope of GB in the *Fall*. Finally, the models were able to predict the location of Atlantic Cod and Yellowtail Flounder, without including environmental covariates, up to 3 years in the future with only a modest loss of predictive ability. The SDMs developed here can be used to identify regions of consistently high and low probability of occurrence, quantify changes in the size of a core area over time and between seasons (surveys), quantify how rapidly distributional shifts occur, and provide short term forecasts of the spatial distributions in future years.
+
+The core area for Atlantic Cod collapsed rapidly in the early 1990s in unison with the collapse of Atlantic Cod (and other groundfish) stocks throughout the Northwest Atlantic [@bundySealsCodForage2009]. Since this collapse, the size of the core area has remained relatively consistent but there has been a shift to the northeast, which was more pronounced in the *Fall*. The loss of core area from the warmer southern and western reaches of the bank was the primary reason for the shift in the distribution of Atlantic Cod into Canadian waters. In more recent years, the *Fall* distribution of Atlantic Cod was likely located on the northeastern slope of the bank and outside of the core survey domains.
+
+This northeastern shift of the stock over the course of this study suggests that the surveys may no longer be sampling the entirety of Atlantic Cod throughout the course of the year (i.e. a higher proportion of the stock may now be located outside of the survey domain in the *Fall* than in the past). The Atlantic Cod stock assessment model for eastern GB Atlantic Cod used the survey indices from all three of the surveys  [@andrushchenkoAssessmentEasternGeorges2018]. However, this assessment model suffered from such significant retrospective patterns that the model was rejected in 2018; the results of this study are in agreement with the suggestion that the observed shift in the distribution of Atlantic Cod outside of the survey domain was a contributing factor to the model retrospective problems [@andrushchenkoAssessmentEasternGeorges2018; @andrushchenkoAlternativeMethodologiesProviding2019]. In addition, because the management of this stock is shared between Canada and the U.S., the observed shift in the core distribution to Canadian waters suggests that shared management policies, such as quota sharing agreements between the two jurisdictions, may require regular review [e.g. @tmgcDevelopmentSharingAllocation2002]. <!--
+The static SST layer and depth were the most influential covariates and indicated that cod preferred the colder portions of the bank throughout the year at depths between XX and XX meters. 
+--->
+
+Yellowtail Flounder were more likely to be found on sandy bottom types, in regions of the bank that historically had lower temperatures, and at depths between `r yt.dep.peak` meters; this is consistent with the known life history for this stock [@johnsonYellowtailFlounderLimanda1999]. In addition, there was a consistent elevated likelihood of encountering Yellowtail Flounder in the region straddling the ICJ line that was not explained by the environmental covariates. This suggests that this region has some unexplained ecological or environmental significance to Yellowtail Flounder. The shift in the distribution of Yellowtail Flounder away from more southern and western parts of GB combined with the declines in biomass of Yellowtail Flounder throughout the U.S. supports the view that environmental change was a factor in the recent decline of Yellowtail Flounder both on GB and throughout the region [@legaultStockAssessmentGeorges2018; @nfsc54thNortheastRegional2012; @noaaNOAAYellowtailFlounder2020; @pershingSlowAdaptationFace2015]. Given the loss of Yellowtail Flounder from the warmer portions of the bank observed in this study, it is possible that the remaining core area straddling the ICJ line represents the most northern suitable habitat on GB for this stock. If temperatures continue to increase, as projected with climate change, the suitability of this habitat may decline, increasing the risk of extirpation of Yellowtail Flounder from GB irrespective of any fisheries management action [@allynComparingSynthesizingQuantitative2020].
+
+<!-- The high EP area for cod collapsed rapidly in the early 1990's in unison with the collapse of cod (and other groundfish) stocks throughout the Northwest Atlantic [@bundySealsCodForage2009]. Since the collapse the core area has remained relatively consistent but has continued to slowly shift to the north and east, though the shift is more pronounced in the fall. The fall distribution of cod is likely now located on the northeastern slope of the bank outside of the core Georges Bank survey domain. This northeastern shift of the population over the course of this study suggests that this population is found outside the Georges Bank survey domain throughout the course of the year (i.e. a higher proportion of the stock is now located outside of this area). Each of the survey indices area used as inputs to the cod stock assessment model for eastern GB cod [@andrushchenkoAssessmentEasternGeorges2018]. This assessment model suffered from such significant retrospective patterns that this stock assessment model was eventually rejected; it is possible that the observed shift in the distribution of cod outside of the survey domain was a contributing factor to the model retrospective problems which was not accounted for in the model [@andrushchenkoAssessmentEasternGeorges2018]. In addition, because the management of this stock is shared between Canada and the U.S., the observed shift in the core distribution to Canadian waters suggests that shared management policies, such as quota sharing agreements between the two jurisdictions, may require regular review [e.g. @tmgcDevelopmentSharingAllocation2002]. -->
+
+<!-- In the U.S. portion of GB closures were put in place in 1994 to assist with the rebuilding of stocks in the region, these closures have been considered as instrumental in the rebuilding of several stocks in the late 1990s [@linkEffectsAreaClosures2005; @murawskiLargescaleClosedAreas2000]. On the Canadian side of GB the primary source of fishery mortality for these species comes from bycatch in the Canadian groundfish and offshore scallop fisheries. In an effort to protect spawning aggregations on Georges Bank from bycatch the Canadian groundfish fishery is excluded from GB from early February until the end of May while the COSF is excluded from fishing inside smaller time-area closures in February, March and June. The temporal shifts in the distribution of these stocks will result in changes in the efficacy of these closed areas over time in terms of protection of the species they were originally designed to protect. In general, the shifts in both stocks to the northeast suggests that closures towards the west of Georges Bank will be less effective in protecting these two stocks than they were when the closures were first implemented while closures towards the north-east portion of Georges Bank may have more influence on these stocks then they did in the past. Additionally, recent work has found little evidence for an effect of the smaller time-area closures in reducing bycatch from the Canadian Offshore Scallop Fishery (CITE PLOS-One). Spatio-temporal models such as these enables the development of metrics which can quantify the overlap between closed areas and the species they are designed to protect, which can lead to insights into the effectiveness of these closures and how the overlap has changes over time and throughout the year (CITE SOMEONE??). -->
+
+### Environmental Covariates and Random Fields
+
+Few of the static environmental covariates examined were related to the distribution of either stock. Only the static SST layer, depth, and sediment type (Yellowtail Flounder only) had any consistent relationship to the likelihood of encountering either stock throughout the duration of this study. The influence of the average SST was somewhat surprising given this layer was derived from monthly SST composites from the Advanced Very High Resolution Radiometer (AVHRR) satellite from 1997 to 2008 [@greenlawGeodatabaseHistoricalContemporary2010] and thus represents an aggregate, static layer from only a subset of the time period covered by the groundfish survey data. However, the importance of this SST layer may be due to its ability to capture general widespread oceanographic features across the bank domain. Further, the observed variability of the effect between seasons was likely a reflection of the connection between surface waters and the benthos given that the degree of vertical mixing and stratification varies with season and spatially across the bank [@kavanaughThirtyThreeYearsOcean2017]. It is acknowledged that the interpretation of the static SST layer used in these analyses as a thermal effect is likely somewhat unrealistic as it assumes that the relative temperature patterns and response of the stocks to these patterns have remained static across more than four decades. To understand how the thermal environment has influenced the stocks' distributions on GB, the development of more advanced models that use either dynamic SST or modelled bottom temperature layers would be beneficial [@greenanClimateChangeVulnerability2019; @pershingSlowAdaptationFace2015]. Further, changes in the distribution of a stock cannot be inferred from static environmental layers like those used in this analysis, the random fields were the means by which the changes in distribution could be tracked.
+
+From a predictive standpoint, the random fields were often able to predict the OP without a substantial loss of predictive ability when compared to the more complex models including the static environmental data (e.g. Figure \@ref(fig:folds)). This occurred because the random fields were flexible enough to capture the variability inherent in the data in each era, while the environmental covariate relationships were constrained to be invariant throughout the entire time series. Recent research suggests that using a static random field in conjunction with a spatio-temporal random field may provide less biased and more accurate estimates than models that rely solely on environmental covariates [@yinReviewSpatiotemporalModel]. The results of the current study also suggest that when environmental data aren't available or are prohibitively expensive to collect, these spatial models on their own can provide insight into the drivers of a stock's distribution. The information from these spatio-temporal models could then be used as a first step to better understand the patterns and processes driving change in the stock's distribution and subsequently help with the design of more efficient data collection programs.
+
+Finally, it should be noted that the observed shifts in the distributions could be due to environmental change and/or direct anthropogenic factors [e.g. fishing; @boudreauConnectivityPersistenceLoss2017]. The shifts in the distributions in the 1970s and 1980s may indeed have been related to either fishing or environmental factors given the relatively high fishing effort during this period [@andersonHistoryFisheriesManagement1997; @andrushchenkoAssessmentEasternGeorges2018; @legaultStockAssessmentGeorges2018]. However, several lines of evidence suggest that fisheries are not inhibiting these stocks from re-establishing themselves in the southern or western portions of GB in more recent years. The lack of a large directed fishery for Atlantic Cod on GB since the early 1990s, along with the addition of two large closures in U.S. waters [@murawskiLargescaleClosedAreas2000] have not resulted in a shift in the distribution of this stock back into southern or western portions of the bank. In addition, in the early 2000s there was a large increase in the biomass of Yellowtail Flounder, which lead to a short-lived directed fishery, that was followed by a rapid decline in the biomass of this stock [@legaultStockAssessmentGeorges2018]. During this ephemeral Yellowtail Flounder recovery, the size of the core area increased substantially on GB, but it remained centred on the ICJ line; there was no widespread re-establishment of this stock throughout southern and western regions where it was observed frequently in the 1970s. Finally, in recent years, bycatch of these two stocks in two lucrative scallop fisheries on GB has been in decline [@okeefeEvaluatingEffectivenessTime2014; @keithEvaluatingSocioeconomicConservation2020], but this has not resulted in an expansion of the distribution of either stock. Given these patterns along with the regional trends observed for other stocks of these species [@bundySealsCodForage2009; @nfsc54thNortheastRegional2012; @noaaNOAAYellowtailFlounder2020; @pershingSlowAdaptationFace2015], it seems likely the distributions of both stocks on GB in recent years were predominately influenced by environmental conditions.
+
+### Conclusion
+
+Temporally variable SDMs provide insight into how the distributions of Yellowtail Flounder and Atlantic Cod have changed on GB. The only static environmental data which had a significant effect on the stocks distributions were the average SST (1997-2008), depth, and bottom type (Yellowtail Flounder only). The inter-annual shifts in the distributions indicate the increasing importance of Canadian waters for both stocks; these shifts are likely due to the long-term environmental shifts observed in the region. Given the habitat constraints faced by both stocks, further shifts in environmental conditions will likely put both stocks at increased risk of extirpation in the U.S. portion of Georges Bank and, eventually, all of GB irrespective of any fisheries management action. The shifts in species distribution identified in these spatio-temporal models can be used to improve science advice and lead to more informed fisheries management decisions.
+
+# ACKNOWLEDGEMENTS
+
+Thanks to Christine Ward-Paige, Yanjun Wang, Dheeraj Busawon, Monica Finley, Phil Politis, and Nancy Shackell for help with data, questions, and the development and exploration of various parts of this project. Thanks to Tricia Pearo Drew, Jamie Raper, and Brittany Wilson for general support and we thank Dan Ricard and Joanna Mills Flemming for their feedback on a previous version of this manuscript. This project was made possible by funding from Fisheries and Oceans Canada (DFO) Strategic Program for Ecosystem-based Research and Advice (SPERA).
+
+<!--- Old stuff --->
+
+<!-- On the Canadian side of GB there has been no directed yellowtail fishery since 2012 [@legaultStockAssessmentGeorges2018]. The primary source of fishery mortality comes from bycatch in the Canadian groundfish and COSF fisheries. In an effort to protect these spawning aggregations from bycatch from these fisheries on GB the Canadian groundfish fishery is excluded from GB from early February until the end of May while the COSF is excluded from fishing inside the time-area closure analyzed in this study in June. Unfortunately, this time-area closure protects only a small proportion of the high EP yellowtail spawning area. While the area in which the COSF is excluded from are predominately regions in which yellowtail are commonly found, due to their limited size these closures are likely to have little impact on bycatch in the COSF. This aligns with previous research which found that bycatch rates from the COSF remain elevated when this closure is in place [Cite PLOS-one]. -->
+
+<!-- In the U.S. portion of GB closures were put in place in 1994 to assist with the rebuilding of stocks in the region, these closures have been considered as instrumental in the rebuilding of several stocks in the late 1990s [@linkEffectsAreaClosures2005; @murawskiLargescaleClosedAreas2000].  Here we see a slight increase in the high EP area for yellowtail during spawning in CA I around the time the closure was put in place which followed a steady decline in the 1970s and 1980s. The high EP area has subsequently declined steadily for yellowtail during its spawning period in CA I.  While CA I historically had represented less than XXX of high EP yellowtail area, in recent decades this has dropped to near 0. Given the restrictions on fishing activity inside CA I during this period, it is likely that this shift in the distribution is due the shifting environmental conditions on GB [@allynComparingSynthesizingQuantitative2020]. Closed Area II (CA II), which straddles the ICJ line, had experienced a large rapid decline in high EP yellowtail area during spawning in the years leading up to the implementation of the CA II closure. This was followed by an large rapid increase in high EP for yellowtail when CA II was put in place.  In recent years CA II has contained a substantial proportion of the high EP yellowtail area on GB during spawning and appears to represent the last large scale habitat suitable for yellowtail on the U.S. side of GB. The rapid expansion of the core yellowtail habitat in the early 2000's was centred on CA II with spillover evident into Canada and corresponded to a rapid increase in yellowtail biomass on GB [@legaultStockAssessmentGeorges2018].  The core area of high EP for yellowtail remained relatively stable starting in the early 2000s and was similar in size to what was observed in the 1970s before this closure was put in place. While these results suggest evidence of a positive association between this closure and yellowtail status, the abrupt yellowtail population decline in the early 2010s [@legaultStockAssessmentGeorges2018], despite the ongoing minimal fishing effort in the area, suggest that the shifting environmental conditions on GB may now be effecting the stock within CA II [@pershingSlowAdaptationFace2015].  -->
+
+<!--  -->
+
+<!-- On the Canadian side of GB (approximated here by the domain of the COSF) while there has been a large decline in high EP area, this decline has been more muted than experienced in U.S. waters. Declines in Canada peaked at approximately XXX% in recent years. Combined with the losses observed in the U.S. this resulted in a rapid increase in the proportion of the high EP domain being located in Canada; Canada had accounted for only XXX % of high EP during spawning in the late 1980s, but in the most recent era the percentage of high EP area for cod in Canada had increased to XXX%.  -->
+
+<!--As with yellowtail, spawning cod are protected by a closure of the groundfish fishery and a smaller time-area closure for the COSF. These time-area closures are relatively small  protect spawning aggregations of cod are predominately located in high EP areas, but due to their limited size the closures protect only a small percentage of the high cod EP area within the COSF domain. This agrees with evidence that bycatch rates remain elevated when this closure is in place due to the small size of these closures with respect to the area of the COSF [Cite PLOS-one]. -->
+
+<!---On the U.S. side of GB there was a rapid decline in the high EP area within CA I for cod during spawning which continued even after this area was closed. This decline was similar to the decline observed at the bank scale and in recent years there has been no high EP area within CA I.  Similar rapid declines were observed in CA II and since 1987 this represents a loss of over XXX km² of high EP area in the U.S. despite the implementation of these closures. These two closures represented approximately XXX% of the high EP cod area during spawning in the late 1980s but only XXX% of the high EP spawning area on GB in more recent eras. These declines are similar to what has been experience throughout the U.S. side of GB during this time, with a loss of cod from U.S. waters and a shift in the distribution of the species to be predominately located in Canadian waters throughout the year. -->
+
+\clearpage
+
+<!--chapter:end:04-discussion.Rmd-->
+
+<!-- In general, you shouldn't need to edit this file with the exception of
+the following French/English translation. For a French document, set the following header to: # RÉFÉRENCES CITÉES {-} -->
+
+\newpage
+
+<br>
+
+# REFERENCES {.unnumbered} 
+<!--- This is need to make sure references go here not at the end of the document... don't ask me what it means! --->
+::: {#refs}
+:::
+
+\newpage
+
+<!--chapter:end:05-references.Rmd-->
+
+\clearpage
+
+# TABLES {#ref-tabs}
+
+<!-- Insert table 1 note how I'm dealing with the table caption here-->
+\blandscape
+
+```{r table-1, echo=F,warning=F}
+table_1 <- read_xlsx(paste0(direct.proj,"Data/enviro_data_table.xlsx"))
+
+ft.note <- c("CoML obtained from  http://waves-vagues.dfo-mpo.gc.ca/Library/342505.pdf" ,
+             "USGS(CONMAP) obtained from https://woodshole.er.usgs.gov/openfile/of2005-1001/htmldocs/datacatalog.htm" ,
+             "USGS(SFS-SMD) obtained from https://woodshole.er.usgs.gov/project-pages/mobility/gmaine.html")
+cap <- "Environmental variables used in the analysis. Variables in \\textbf{bold} were retained after Variance Inflation Factor (VIF) analyses and were included in the linear models. Variables in \\textit{italics} were used for the Principal Component Analysis (PCA)"
+if(french) 
+{  
+cap <- "Variables environnementales utilisées dans l'analyse. Les variables \\textbf{en gras} ont été retenues après les Variance Inflation Factor (VIF) analyses et ont été incluses dans les modèles linéaires. Les variables en \\textit{italique} ont été utilisées pour les principales analysis par composantes (PCA)"
+
+ft.note <-  c("CoML obtenu auprès de  http://waves-vagues.dfo-mpo.gc.ca/Library/342505.pdf" ,
+              "USGS(CONMAP) obtenu auprès de https://woodshole.er.usgs.gov/openfile/of2005-1001/htmldocs/datacatalog.htm" ,
+              "USGS(SFS-SMD) obtenu auprès de https://woodshole.er.usgs.gov/project-pages/mobility/gmaine.html")
+}
+
+options(knitr.kable.NA = '')
+# NEED TO SORT THE meta call out in the index using bookdown instead of csasdown to mimic the behaviour to make table work automaticlaly in word an d pdf.
+
+if(any(grepl("pdf", names(meta))))
+{
+kableExtra::kbl(table_1, booktabs = TRUE, escape =F, format='latex',
+  caption = cap) %>%
+  kable_styling(full_width = F) %>% row_spec(c(2:10,12,14:18,20), bold = T) %>%
+  kable_styling(full_width = F) %>% row_spec(c(2,4,5,8:12,14,17,20), italic = T) %>%
+footnote(number  = ft.note) #%>% landscape
+}
+
+if(any(grepl("word", names(meta))))
+{
+kableExtra::kbl(table_1, booktabs = TRUE, escape =F, format = 'pipe',
+  caption = cap) %>%
+  kable_styling(full_width = F) %>% row_spec(c(2:10,12,14:18,20), bold = T) %>%
+  kable_styling(full_width = F) %>% row_spec(c(2,4,5,8:12,14,17,20), italic = T) %>%
+footnote(number  = ft.note) #%>% landscape
+}
+```
+
+\elandscape
+\newpage
+
+<!--chapter:end:06-tables.Rmd-->
+
+\clearpage
+
+# FIGURES {#ref-figs}
+
+<br>
+
+```{r Overview, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Georges Bank (GB) study area.  Points represent the sample locations for each of the three surveys and the orange outline represents the core region of GB included in these analyses (42,000 km²).  The red line delineates the Canadian exclusive economic zone (EEZ)."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(over.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\clearpage
+```{r Mesh, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Delaunay triangular mesh used for the analyses. The mesh contains 6610 vertices. The red line delineates the Canadian exclusive economic zone (EEZ)."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(mesh.plt)
+```
+
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\blandscape
+\newpage
+```{r cog-hep, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Center of Gravity (COG) for the core area (OP $\\geq$ 0.75) of Atlantic Cod (top panel) and Yellowtail Flounder (bottom panels) in the Winter (left), Spring (center), and Fall (right) using the final models.  Blue lines indicate ±3 standard deviation units from the mean COG. Labels indicate the years associated with each era and the red line is border between the U.S. and Canada."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(cog.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r area-hep, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Time series of the size of the core area (OP $\\geq$ 0.75) on GB for each of the three seasons using the final models.  The Atlantic Cod time series is on the left and the Yellowtail Flounder on the right.  The black line represents the Winter trend, the blue line is the Spring trend, and the green line is the Fall trend.  "}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(area.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r area-can-vs-us-hep, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Time series of the size of the core area (OP $\\geq$ 0.75) on for each of the three seasons in Canada and the U.S..  The Atlantic Cod time series is in the top row and Yellowtail Flounder in the bottom row, Canada is on the left and U.S. is on the right.  The black line represents the Winter trend, the blue line is the Spring trend, and the green line is the Fall trend.  "}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(area.can.vs.us.plt)
+```
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r cod-fe, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Environmental covariate effects for Atlantic Cod for each season, top row is the Dep covariate effect, bottom row is the SST effect. Results have been transformed to the probability scale and the blue shaded region represents the 95\\% credible interval."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(cod.fe.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r yt-fe, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Environmental covariate effects for Yellowtail Flounder for each season, the top row is the Dep covariate effect, middle row is the SST effect, and the bottom row is the Sed effect. Results have been transformed to the probability scale, and the blue shaded region and the error bars represent the 95\\% credible intervals. The Winter and Spring results use a 3 year random field while the Fall results are for the 5 year random field model."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(yt.fe.plt)
+```
+
+
+
+\clearpage
+
+```{r hyper-range-var-est, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Decorrelation range estimate with 95\\% credible intervals for each season."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(range.field.est.plt)
+```
+
+\clearpage
+
+```{r hyper-sd-var-est, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard Deviation of the field with 95\\% credible intervals for each season."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(sd.field.est.plt)
+```
+
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r folds, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Results of five fold cross validation analyses. Top panels represents the mean error for each of the three covariate models tested for Atlantic Cod (using Winter data) and Yellowtail Flounder (using Spring data). Blue points represent the prediction error from the testing dataset, while the black points are the residuals from the training dataset. The bottom panels are the RMSE for these models.  The red dashed line represents the RMSE for randomly generated data and represents the RMSE for a model with no predictive ability. All models use the 5 year random field due to computational constraints."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(folds.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pred-17-19, echo=FALSE,out.width="100%",dpi=200,fig.cap = "The residual RMSE for the model is shown in black, while the blue lines represent the prediction RMSE for data in years 2017, 2018, and 2019. The models compared were a model with no covariates (intercept + random field) represented by the dashed line and a model which includes the additive SST and Dep covariates along with the random field represented by the solid line. Atlantic Cod results are in the top row and use a 5 year random field. Yellowtail Flounder results are in the bottom row and use a 3 year random field for the Winter and Spring and the 5 year random field for the Fall. The red dot-dash line represents the RMSE for randomly generated data and represents the RMSE for a model with no predictive ability."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pred.17.19.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\elandscape
+
+
+<!--chapter:end:07-figures.Rmd-->
+
+<!-- The following code should appear at the beginning of the first appendix.
+After that, all subsequent sections will be turned into appendices. -->
+\newpage
+<!-- Adding in a {-#supplement} turns off chapter/section numbering for that specific section, handy if needed, for example '# Supplement  {-#supplement} '` :-) --->
+# SUPPLEMENT 1 {#ref-sup}
+
+\beginsupplement
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+<!-- -->
+```{r PCA, echo=FALSE,out.width="75%",dpi=200,fig.cap = "Principal Component Analysis (PCA) results for the Winter, Spring, and Fall seasons using the retained environmental data and the 4 retained Princpal Components (PCs). The results for PC 1 and 2 for each season are on the top and the PC 3 and 4 results are on the bottom.  Left column are the results for Winter, middle column for Spring, and right column is for the Fall. The percentage of the variance explained by each PC is provided on the axes labels.  Points represent the score for each survey observation.  The loadings for each covariate in the analysis are shown by the length of their respective lines. PC scores greater than ± 3 units not shown."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pca.plt)
+```
+
+\newpage
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\clearpage
+```{r mesh-grid, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Prediction grid used for prediction of occurrence probability (OP)."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(mesh.grid.plt)
+```
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\clearpage
+```{r SST-Dep-Sed, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Georges Bank (GB) Average Sea Surface Temperature from 1997-2008 (SST in °C) in the top panel, bathymetry (depth in meters) in the center panel, and sediment type in the bottom panel."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(sst_depth_spatial.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\blandscape 
+```{r gini-index, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Gini Index "}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(gini.index.plt)
+```
+\elandscape 
+
+## Model Selection
+
+Stage 1 of model selection resulted in a significant reduction in the number of covariates. For Atlantic Cod, sea surface temperature (SST) was identified as a significant covariate in the *Winter* and *Spring*, in addition Dep and stratification were also significant predictors in the *Spring*. In the *Fall* no covariates had a WAIC that were a significant improvement from the intercept only model (Figure \@ref(fig:diag-1-fe)). Further model selection indicated that an additive Dep + SST model was the *final model* in all 3 seasons for Atlantic Cod (Figures \@ref(fig:diag-2-fe) and \@ref(fig:diag-3-fe)). When exploring the effect of temporal variability on the random fields, the models using the 5-year random field had the lowest WAIC in all seasons (Figure \@ref(fig:diag-rf)).
+
+For Yellowtail Flounder, stage 1 of model selection indicated that the inclusion of Dep significantly improved the models in all 3 seasons (surveys), while Sediment type (Sed) and chlorophyll concentration (Chl) in the *Fall* had a similar impact on the model WAIC as Dep. As a result SST, Dep, Chl, and Sed were used to explore the development of more complex covariate models. For Yellowtail Flounder the best models in stage 2 of model selection included 2 covariates with a combination of Dep, SST, and Sed (Figure \@ref(fig:diag-2-fe)). Further model selection indicated that the *final model* for Yellowtail Flounder in all 3 seasons was an additive model including Dep, SST, and Sed (Figure \@ref(fig:diag-3-fe)). When exploring the effect of temporal variability on the random fields, the 3-year field had the lowest WAIC in the *Winter* and *Spring*, while the 5-year field had the lowest WAIC in the *Fall* (Figure \@ref(fig:diag-rf)). Additional model selection results are available in the Model Output and Model Diagnostics sections of the interactive [dashboard](https://github.com/Dave-Keith/Paper_2_SDMs/tree/master/Dashboard).
+
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\blandscape 
+\newpage
+```{r diag-1-fe, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Initial stage of forward model selection using each of the environmental covariates individually.  This model selection was done using a static random field. Blue dashed line is 2 WAIC units larger than the model with the lowest WAIC, the green dashed line is 10 WAIC units larger than the model with the lowest WAIC. The full description of the environmental variables can be found in Table 1."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(diag.waic.single.fe.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r diag-2-fe, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Stage 2 of model selection including additive models with 2 covariates based on the covariates identified in the initial model selection stage. These models were compared using the 10-year random field models. Blue dashed line is 2 WAIC units larger than the model with the lowest WAIC, the green dashed line is 10 WAIC units larger than the model with the lowest WAIC. The full description of the environmental variables can be found in Table 1."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(diag.waic.2.covars.fe.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r diag-3-fe, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Final stage of covariate model selection which includes model with up to 3 covariate terms based on models selected at stage 2. Blue dashed line is 2 WAIC units larger than the model with the lowest WAIC, the green dashed line is 10 WAIC units larger than the model with the lowest WAIC. The full description of the environmental variables can be found in Table 1."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(diag.waic.3.covars.fe.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r diag-rf, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Model selection comparing the random fields models.  For cod the model used is Dep + SST for all of the random fields.  For Yellowtail the 5 and 10 year random fields were compared using the Dep + SST model, while the 5 and 3 fields were compared using the slightly preferred Dep + SST + Sed model. Blue dashed line is 2 WAIC units larger than the model with the lowest WAIC, the green dashed line is 10 WAIC units larger than the model with the lowest WAIC."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(diag.waic.rf.plt)
+```
+\elandscape
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\clearpage
+
+
+# Predicted Occurrence Probability
+
+The modeled OP for Atlantic Cod in the *Winter* and *Spring* was elevated on all but the most southern portion of GB in the 1970s and 1980s, in the early 1990s there was an abrupt decline in the OP throughout much of the U.S. portion of GB, while OP remained elevated in Canadian waters and in the area straddling the ICJ line (Figures \@ref(fig:pf-winter-cod) - \@ref(fig:pf-spring-cod)). In the *Fall* the core areas were isolated in northern of GB. An area on the northwest of GB had some core area until the early 1980s but the OP in this area declined steadily after this time and has had a low OP in the *Fall* for over 20 years, the highest OP areas remaining during the *Fall* are along the northern edge of the bank and mostly in Canadian waters (Figure \@ref(fig:pf-fall-cod)).
+
+The modeled OP patterns for Yellowtail Flounder on GB are similar in the *Winter*, *Spring*, and *Fall* with core area consistently observed in the region straddling the ICJ line in each season and throughout the study period (Figures \@ref(fig:pf-winter-yt) - \@ref(fig:pf-fall-yt)). A second region along the western border of the bank also has an elevated OP and appears to be connected via a narrow band of varying width to the core area straddling the ICJ line. The core area of Yellowtail Flounder declined in the late 1980s and early 1990s and was relatively stable until 2016 (Figure \@ref(fig:pf-fall-yt)).
+
+The standard deviation (SD) of the Atlantic Cod prediction field in the *Winter* and *Spring* tended to be elevated in the central portion of the bank, and lowest in the south and along the edges of the prediction domain. In the *Fall* the Atlantic Cod prediction field SD was lowest in the south, with the low SD area expanding to central regions later in the study period (Figures \@ref(fig:pf-winter-cod-sd) - \@ref(fig:pf-fall-cod-sd)). For Yellowtail Flounder, the SD was consistently low in the part of the region with a core area that straddled the ICJ line in the *Winter*, *Spring*, and *Fall* (Figures \@ref(fig:pf-winter-yt-sd) - \@ref(fig:pf-fall-yt-sd)). Areas surrounding this region displayed an increase in the SD, while a region in the north and along the southern flank of GB had relatively low SDs; these regions also had relatively low OPs (Figures \@ref(fig:pf-winter-yt) - \@ref(fig:pf-fall-yt) and \@ref(fig:pf-winter-yt-sd) - \@ref(fig:pf-fall-yt-sd)).
+
+
+
+<!-- PREDICTION AREA PLOTS ---><!-- PREDICTION AREA PLOTS ---><!-- PREDICTION AREA PLOTS ---><!-- PREDICTION AREA PLOTS ---><!-- PREDICTION AREA PLOTS ---><!-- PREDICTION AREA PLOTS --->
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+
+\newpage
+\blandscape
+```{r pf-winter-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Atlantic Cod  in each era during the Winter (RV survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.winter.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-spring-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Atlantic Cod  in each era during the Spring (NMFS-spring survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.spring.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-fall-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Atlantic Cod  in each era during the Fall (NMFS-fall survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.fall.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-winter-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Yellowtail Flounder in each era during the Winter (RV survey) using the SST + Dep + Sed model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.winter.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-spring-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Yellowtail Flounder in each era during the Spring (NMFS-spring survey) using the SST + Dep + Sed  model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.spring.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-fall-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Predicted occurrence probability for Yellowtail Flounder in each era during the Fall (NMFS-fall survey) using the SST + Dep + Sed model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.fall.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+<!-- Standard deviation of random field... --->
+
+```{r pf-winter-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Atlantic Cod  in each era during the Winter (RV survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.winter.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-spring-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Atlantic Cod  in each era during the Spring (NMFS-spring survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.spring.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-fall-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Atlantic Cod  in each era during the Fall (NMFS-fall survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.fall.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-winter-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Yellowtail Flounder in each era during the Winter (RV survey) using the SST + Dep + Sed  model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.winter.yt.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+
+```{r pf-spring-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Yellowtail Flounder in each era during the Spring (NMFS-spring survey) using the  SST + Dep + Sed  model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.spring.yt.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r pf-fall-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation (logit scale) of predicted occurrence probability for Yellowtail Flounder in each era during the Fall (NMFS-fall survey) using the SST + Dep + Sed  model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(pf.fall.yt.sd.plt)
+```
+\elandscape
+
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\clearpage
+
+## Random fields 
+
+The 5-year random fields for Atlantic Cod in the Winter and Spring are seasonally consistent through time, with lower effect sizes observed in both seasons starting in 1992 and the largest declines in the effect size observed in the southern and western portions of GB (Figures \@ref(fig:rf-winter-cod) - \@ref(fig:rf-spring-cod)). In the Fall the higher effect sizes were generally observed towards the north and in Canadian waters, with larger declines in the random field effect size towards the west over the study period (Figure \@ref(fig:rf-fall-cod)).
+
+The Yellowtail Flounder random field patterns were similar in the Winter and Spring while the random field effect sizes were somewhat smaller during the Fall (Figures \@ref(fig:rf-winter-yt) - \@ref(fig:rf-fall-yt)). The effect size of the random fields, in all seasons, were lower throughout the latter half of the 1980s and the early 1990s. The highest effect size of the random fields were observed in the 1970s and in the 2000s. Since the mid-1970s an area straddling the Canadian-U.S. border has been consistently identified as an area where the Yellowtail Flounder effect size of the random field is elevated (Figures \@ref(fig:rf-winter-yt) - \@ref(fig:rf-fall-yt)).
+
+The standard deviation (SD) of the random fields for Atlantic Cod were also similar between seasons with the lowest SD generally observed in the north and east and highest approaching the southern flank of GB. The SD was somewhat higher in the Fall throughout the central portion of GB (Figures \@ref(fig:rf-winter-cod-sd) - \@ref(fig:rf-fall-cod-sd)). For Yellowtail Flounder, the SD was higher towards the southern portions of the bank with localized regions having elevated SD scattered throughout the bank in the Winter, Spring, and Fall. (Figures \@ref(fig:rf-winter-yt-sd) - \@ref(fig:rf-fall-yt-sd)).
+
+
+<!-- Random EFFECTS PLOTS ---><!-- Random EFFECTS PLOTS ---><!-- Random EFFECTS PLOTS ---><!-- Random EFFECTS PLOTS ---><!-- Random EFFECTS PLOTS --->
+\blandscape
+```{r rf-winter-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Atlantic Cod  in each era during the Winter (RV survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.winter.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-spring-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Atlantic Cod  in each era during the Spring (NMFS-spring survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.spring.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-fall-cod, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Atlantic Cod  in each era during the Fall (NMFS-fall survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.fall.cod.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-winter-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Yellowtail Flounder in each era during the Winter (RV survey) using the SST + Dep + Sed model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.winter.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-spring-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Yellowtail Flounder in each era during the Spring (NMFS-spring survey) using the SST + Dep + Sed model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.spring.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-fall-yt, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Random fields (logit scale) for Yellowtail Flounder in each era during the Fall (NMFS-fall survey) using the SST + Dep + Sed model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.fall.yt.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+<!-- Standard deviation of random field... --->
+
+```{r rf-winter-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Atlantic Cod  in each era during the Winter (RV survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.winter.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-spring-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Atlantic Cod  in each era during the Spring (NMFS-spring survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.spring.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-fall-cod-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Atlantic Cod  in each era during the Fall (NMFS-fall survey) using the SST + Dep model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.fall.cod.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-winter-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Yellowtail Flounder in each era during the Winter (RV survey) using the SST + Dep + Sed model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.winter.yt.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-spring-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Yellowtail Flounder in each era during the Spring (NMFS-spring survey) using the SST + Dep + Sed model and 3-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.spring.yt.sd.plt)
+```
+
+
+<!-- Make sure you have a couple lines of blank space after the figure calls or the captions don't print because that's what Rmarkdown does... --->
+\newpage
+```{r rf-fall-yt-sd, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Standard deviation of random fields (logit scale) for Yellowtail Flounder in each era during the Fall (NMFS-fall survey) using the SST + Dep + Sed model and 5-year random field."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(rf.fall.yt.sd.plt)
+```
+\elandscape
+
+## Hyperparameters
+
+For Atlantic Cod, the estimate for the variance of the Dep variance hyperparameter was highest in Winter and declined through to the Fall, reflecting the decline in the influence of this covariate in the Fall (Figure \@ref(fig:hyper-dep-var-est)). For Yellowtail Flounder, the variance of the Dep hyperparameter was higher than observed for Atlantic Cod throughout the year and reflected the relative stability in the effect size of this covariate throughout the year (Figure \@ref(fig:hyper-dep-var-est)). The SST variance hyperparameter for Atlantic Cod was relatively stable throughout the year and reflects the consistent influence of the SST covariate on the distribution of cod. For Yellowtail Flounder, the SST variance hyperparameter was relatively low throughout the year and aligns with the consistent small effect of the SST covariate on the distribution of Yellowtail Flounder (Figure \@ref(fig:hyper-sst-var-est)). The uncertainty of these estimates precludes any statistical differences being observed between the seasons.
+<!-- HYPERPARAMETERS AND VALIDATION PLOTS ---><!-- HYPERPARAMETERS AND VALIDATION PLOTS ---><!-- HYPERPARAMETERS AND VALIDATION PLOTS --->
+
+```{r hyper-dep-var-est, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Dep variance hyperparameter estimate with 95\\% credible intervals for each stock in each season."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(dep.var.est.plt)
+```
+
+\clearpage
+
+```{r hyper-sst-var-est, echo=FALSE,out.width="100%",dpi=200,fig.cap = "SST variance hyperparameter estimate with 95\\% credible intervals for each stock in each season."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(sst.var.est.plt)
+```
+
+
+\clearpage
+
+```{r hyper-cod-winter-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Atlantic Cod in the Winter."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(cod.winter.marginal.plt)
+```
+
+\clearpage
+
+```{r hyper-cod-spring-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Atlantic Cod in the Spring."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(cod.spring.marginal.plt)
+```
+
+\clearpage
+
+```{r hyper-cod-fall-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Atlantic Cod  in the Fall."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(cod.fall.marginal.plt)
+```
+
+\clearpage
+
+```{r hyper-yt-winter-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Yellowtail Flounder in the Winter."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(yt.winter.marginal.plt)
+```
+
+\clearpage
+
+```{r hyper-yt-spring-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Yellowtail Flounder in the Spring."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(yt.spring.marginal.plt)
+```
+
+\clearpage
+
+```{r hyper-yt-fall-post, echo=FALSE,out.width="100%",dpi=200,fig.cap = "Posteriors distributions of the four model hyperparameters for Yellowtail Flounder in the Fall."}
+# Note that out.width and out.height and dpi don't do anything for word document output in the chunck control above, they wil impact html and pdf output
+knitr::include_graphics(yt.fall.marginal.plt)
+```
+
+\clearpage
+
+
+
+<!--chapter:end:08-supplement.Rmd-->
+
